@@ -8,9 +8,6 @@ const __dirname = path.dirname(__filename);
 const nextConfig = {
   reactStrictMode: true,
   outputFileTracingRoot: path.resolve(__dirname),
-  experimental: {
-    outputFileTracingRoot: path.resolve(__dirname),
-  },
 };
 
 export default nextConfig;
