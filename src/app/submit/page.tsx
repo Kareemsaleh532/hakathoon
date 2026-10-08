@@ -176,7 +176,7 @@ function SubmissionContent() {
             </span>
           </div>
 
-          <h1 style={{ fontSize: '1.8rem', fontWeight: 800, marginBottom: '14px', color: '#f8fafc' }}>
+          <h1 style={{ fontSize: 'clamp(1.2rem, 3.5vw, 1.8rem)', fontWeight: 800, marginBottom: '14px', color: '#f8fafc' }}>
             التسليم غير متاح حالياً
           </h1>
 
@@ -207,7 +207,7 @@ function SubmissionContent() {
         <span className="badge badge-emerald" style={{ marginBottom: '6px' }}>
           بوابة التسليم مفتوحة
         </span>
-        <h1 style={{ fontSize: '2rem', fontWeight: 800, color: '#ffffff' }}>
+        <h1 style={{ fontSize: 'clamp(1.4rem, 4vw, 2rem)', fontWeight: 800, color: '#ffffff' }}>
           تسليم المشروع النهائي للفريق
         </h1>
         <p style={{ color: 'var(--text-dim)', fontSize: '0.9rem' }}>

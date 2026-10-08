@@ -154,7 +154,7 @@ export default function ParticipantsPage() {
     <div className="container" style={{ paddingTop: '30px' }}>
       {/* Top Banner */}
       <div style={{ textAlign: 'center', marginBottom: '28px' }}>
-        <h1 style={{ fontSize: '2.2rem', fontWeight: 800, color: '#ffffff' }}>صفحة المشاركين والفرق</h1>
+        <h1 style={{ fontSize: 'clamp(1.4rem, 4vw, 2.2rem)', fontWeight: 800, color: '#ffffff' }}>صفحة المشاركين والفرق</h1>
         <p style={{ color: 'var(--text-dim)', maxWidth: '650px', margin: '6px auto 0' }}>
           متابعة الفريق، استعراض الزملاء، والاطلاع على حالة تسليم المشروع
         </p>

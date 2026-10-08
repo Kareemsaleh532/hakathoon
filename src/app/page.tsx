@@ -154,7 +154,7 @@ export default function RootPage() {
               {user.role === 'admin' ? 'حساب الادمن' : user.role === 'judge' ? 'حساب المحكم' : 'حساب المتسابق'}
             </span>
           </div>
-          <h1 style={{ fontSize: '2rem', fontWeight: 800, marginBottom: '8px' }}>
+          <h1 style={{ fontSize: 'clamp(1.4rem, 4vw, 2rem)', fontWeight: 800, marginBottom: '8px' }}>
             مرحباً بك في هاكاثون، {user.name}
           </h1>
           <p style={{ color: 'var(--text-dim)', marginBottom: '24px' }}>
@@ -199,7 +199,7 @@ export default function RootPage() {
     <div className="container" style={{ maxWidth: '540px', paddingTop: '40px' }}>
       {/* Brand Header */}
       <div style={{ textAlign: 'center', marginBottom: '24px' }}>
-        <h1 style={{ fontSize: '2.2rem', fontWeight: 800, marginBottom: '4px', color: '#ffffff' }}>
+        <h1 style={{ fontSize: 'clamp(1.4rem, 4vw, 2.2rem)', fontWeight: 800, marginBottom: '4px', color: '#ffffff' }}>
           هاكاثون
         </h1>
         <p style={{ color: 'var(--text-dim)', fontSize: '0.92rem' }}>

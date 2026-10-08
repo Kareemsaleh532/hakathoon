@@ -10,6 +10,7 @@ export default function Navbar() {
   const router = useRouter();
   const { user, logout } = useAuth();
   const [isSubmissionOpen, setIsSubmissionOpen] = useState<boolean | null>(null);
+  const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
 
   useEffect(() => {
     const fetchStatus = async () => {
@@ -29,9 +30,18 @@ export default function Navbar() {
     return () => clearInterval(interval);
   }, []);
 
+  // Close mobile menu on route change
+  useEffect(() => {
+    setMobileMenuOpen(false);
+  }, [pathname]);
+
   const handleLogout = () => {
     logout();
     router.push('/');
+  };
+
+  const toggleMobileMenu = () => {
+    setMobileMenuOpen(prev => !prev);
   };
 
   return (
@@ -51,9 +61,19 @@ export default function Navbar() {
           )}
         </div>
 
+        {/* Hamburger button - visible only on mobile */}
+        <button 
+          className="hamburger-btn"
+          onClick={toggleMobileMenu}
+          aria-label="القائمة"
+          type="button"
+        >
+          {mobileMenuOpen ? '✕' : '☰'}
+        </button>
+
         {/* Dynamic navigation links depending on authentication & role */}
         {user ? (
-          <nav className="nav-links">
+          <nav className={`nav-links ${mobileMenuOpen ? 'mobile-open' : ''}`}>
             <Link 
               href="/" 
               className={`nav-link ${pathname === '/' ? 'active' : ''}`}
@@ -105,9 +125,18 @@ export default function Navbar() {
                 صفحة الادمن
               </Link>
             )}
+
+            {/* Mobile-only logout button inside menu */}
+            <button
+              onClick={handleLogout}
+              className="nav-link"
+              style={{ background: 'transparent', border: 'none', cursor: 'pointer', color: '#f87171', fontWeight: 600, textAlign: 'right', display: 'none' }}
+            >
+              تسجيل الخروج
+            </button>
           </nav>
         ) : (
-          <nav className="nav-links">
+          <nav className={`nav-links ${mobileMenuOpen ? 'mobile-open' : ''}`}>
             <span style={{ fontSize: '0.85rem', color: 'var(--text-dim)' }}>
               يرجى تسجيل الدخول للوصول إلى النظام
             </span>

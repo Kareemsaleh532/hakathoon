@@ -195,9 +195,9 @@ export default function JudgePage() {
   return (
     <div className="container" style={{ paddingTop: '30px' }}>
       {/* Header */}
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '16px', marginBottom: '24px' }}>
-        <div>
-          <h1 style={{ fontSize: '1.8rem', fontWeight: 800, color: '#ffffff' }}>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', flexWrap: 'wrap', gap: '16px', marginBottom: '24px' }}>
+        <div style={{ flex: '1 1 280px', minWidth: 0 }}>
+          <h1 style={{ fontSize: 'clamp(1.2rem, 3vw, 1.8rem)', fontWeight: 800, color: '#ffffff' }}>
             صفحة الحكام - تقييم مشاريع الفرق
           </h1>
           <p style={{ color: 'var(--text-dim)', fontSize: '0.9rem' }}>

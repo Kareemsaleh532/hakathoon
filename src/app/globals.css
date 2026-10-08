@@ -442,6 +442,20 @@ a {
   gap: 16px;
 }
 
+/* =============================================
+   RESPONSIVE BREAKPOINTS
+   ============================================= */
+
+/* Tablet landscape */
+@media (max-width: 1024px) {
+  .container {
+    max-width: 100%;
+    padding-left: 16px;
+    padding-right: 16px;
+  }
+}
+
+/* Tablet portrait */
 @media (max-width: 900px) {
   .grid-4 {
     grid-template-columns: repeat(2, 1fr);
@@ -451,13 +465,223 @@ a {
   }
 }
 
+/* Small tablets / large phones */
+@media (max-width: 768px) {
+  .brand-tag {
+    display: none;
+  }
+
+  .brand-title {
+    font-size: 1.25rem;
+  }
+
+  .nav-links {
+    display: none;
+  }
+
+  .nav-links.mobile-open {
+    display: flex;
+    flex-direction: column;
+    width: 100%;
+    order: 10;
+    gap: 2px;
+    padding-top: 10px;
+    border-top: 1px solid var(--border-color);
+    margin-top: 10px;
+  }
+
+  .nav-links.mobile-open .nav-link {
+    width: 100%;
+    text-align: right;
+    padding: 10px 14px;
+    border-radius: 6px;
+  }
+
+  .nav-container {
+    flex-wrap: wrap;
+  }
+
+  .hamburger-btn {
+    display: flex !important;
+  }
+
+  .nav-user-status .badge {
+    font-size: 0.72rem;
+    padding: 2px 6px;
+  }
+
+  .nav-user-status .btn {
+    padding: 5px 10px;
+    font-size: 0.78rem;
+  }
+
+  .status-pill {
+    font-size: 0.72rem;
+    padding: 3px 8px;
+  }
+
+  .tabs-header {
+    gap: 4px;
+    padding-bottom: 8px;
+    margin-bottom: 16px;
+  }
+
+  .tab-btn {
+    padding: 6px 10px;
+    font-size: 0.8rem;
+  }
+
+  .data-table th,
+  .data-table td {
+    padding: 8px 10px;
+    font-size: 0.82rem;
+  }
+
+  .card {
+    padding: 16px;
+  }
+
+  .card-title {
+    font-size: 1.1rem;
+  }
+
+  .btn {
+    padding: 8px 14px;
+    font-size: 0.86rem;
+  }
+
+  .btn-sm {
+    padding: 5px 10px;
+    font-size: 0.78rem;
+  }
+
+  .form-control,
+  .form-select,
+  .form-textarea {
+    padding: 9px 12px;
+    font-size: 0.88rem;
+  }
+
+  .modal-content {
+    padding: 16px;
+    margin: 10px;
+    max-height: 95vh;
+  }
+
+  .modal-overlay {
+    padding: 10px;
+  }
+}
+
+/* Mobile phones */
 @media (max-width: 650px) {
   .grid-2, .grid-4 {
     grid-template-columns: 1fr;
   }
+
   .nav-container {
+    flex-direction: row;
+    flex-wrap: wrap;
+    align-items: center;
+  }
+
+  .nav-user-status {
+    gap: 6px;
+  }
+}
+
+/* Small mobile phones */
+@media (max-width: 480px) {
+  body {
+    font-size: 0.92rem;
+    line-height: 1.5;
+  }
+
+  .container {
+    padding-left: 12px;
+    padding-right: 12px;
+  }
+
+  .card {
+    padding: 14px;
+    border-radius: 6px;
+  }
+
+  .card-title {
+    font-size: 1rem;
+  }
+
+  .card-subtitle {
+    font-size: 0.82rem;
+  }
+
+  .brand-title {
+    font-size: 1.1rem;
+  }
+
+  .tabs-header {
+    gap: 3px;
+  }
+
+  .tab-btn {
+    padding: 5px 8px;
+    font-size: 0.75rem;
+  }
+
+  .data-table th,
+  .data-table td {
+    padding: 6px 8px;
+    font-size: 0.78rem;
+  }
+
+  .form-label {
+    font-size: 0.82rem;
+  }
+
+  .form-control,
+  .form-select,
+  .form-textarea {
+    padding: 8px 10px;
+    font-size: 0.85rem;
+  }
+
+  .btn {
+    padding: 7px 12px;
+    font-size: 0.82rem;
+  }
+
+  .badge {
+    font-size: 0.72rem;
+    padding: 2px 6px;
+  }
+
+  .alert {
+    padding: 10px 12px;
+    font-size: 0.82rem;
     flex-direction: column;
-    align-items: stretch;
+    gap: 8px;
+  }
+
+  .modal-overlay {
+    padding: 6px;
+    align-items: flex-end;
+  }
+
+  .modal-content {
+    padding: 14px;
+    border-radius: 8px 8px 0 0;
+    max-height: 92vh;
+  }
+
+  .grid-2, .grid-3, .grid-4 {
+    grid-template-columns: 1fr;
+    gap: 12px;
+  }
+
+  .num-pill {
+    width: 22px;
+    height: 22px;
+    font-size: 0.72rem;
   }
 }
 
@@ -498,4 +722,99 @@ a {
   max-height: 90vh;
   overflow-y: auto;
   box-shadow: none;
+}
+
+/* Hamburger Button */
+.hamburger-btn {
+  display: none !important;
+  align-items: center;
+  justify-content: center;
+  width: 36px;
+  height: 36px;
+  border-radius: 6px;
+  border: 1px solid var(--border-color);
+  background: #262626;
+  color: #ffffff;
+  cursor: pointer;
+  font-size: 1.2rem;
+  padding: 0;
+  flex-shrink: 0;
+}
+
+.hamburger-btn:hover {
+  background: #383838;
+  border-color: #4a4a4a;
+}
+
+/* Responsive page headers */
+.page-header-responsive {
+  text-align: center;
+}
+
+@media (max-width: 768px) {
+  .page-header-responsive h1 {
+    font-size: 1.4rem !important;
+  }
+  .page-header-responsive p {
+    font-size: 0.82rem !important;
+  }
+}
+
+@media (max-width: 480px) {
+  .page-header-responsive h1 {
+    font-size: 1.2rem !important;
+  }
+}
+
+/* Responsive flex helpers */
+.flex-col-mobile {
+  display: flex;
+  gap: 12px;
+}
+
+@media (max-width: 650px) {
+  .flex-col-mobile {
+    flex-direction: column;
+  }
+}
+
+/* Table scroll hint */
+.table-responsive {
+  position: relative;
+}
+
+@media (max-width: 768px) {
+  .table-responsive {
+    border: 1px solid var(--border-color);
+    border-radius: 6px;
+  }
+
+  .table-responsive::after {
+    content: '← اسحب للمزيد →';
+    display: block;
+    text-align: center;
+    font-size: 0.72rem;
+    color: var(--text-dim);
+    padding: 4px 0;
+    background: var(--bg-input);
+    border-top: 1px solid var(--border-color);
+  }
+
+  .data-table {
+    min-width: 600px;
+  }
+}
+
+/* Touch-friendly inputs for mobile */
+@media (max-width: 768px) {
+  input[type="text"],
+  input[type="email"],
+  input[type="password"],
+  input[type="tel"],
+  input[type="url"],
+  input[type="number"],
+  select,
+  textarea {
+    font-size: 16px !important; /* Prevents iOS zoom on focus */
+  }
 }

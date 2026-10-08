@@ -41,7 +41,7 @@ export default function ChallengesPage() {
     <div className="container" style={{ paddingTop: '30px' }}>
       {/* Header */}
       <div style={{ textAlign: 'center', marginBottom: '32px' }}>
-        <h1 style={{ fontSize: '2.2rem', fontWeight: 800, marginBottom: '6px', color: '#ffffff' }}>
+        <h1 style={{ fontSize: 'clamp(1.4rem, 4vw, 2.2rem)', fontWeight: 800, marginBottom: '6px', color: '#ffffff' }}>
           صفحة التحديات البيئية والمناخية
         </h1>
         <p style={{ color: 'var(--text-dim)', maxWidth: '650px', margin: '0 auto' }}>
