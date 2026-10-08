@@ -1,0 +1,166 @@
+{
+  "users": [
+    {
+      "id": "admin-1",
+      "name": "مدير الهاكاثون",
+      "email": "admin@hackathon.com",
+      "password": "admin",
+      "role": "admin",
+      "createdAt": "2026-10-07T22:13:02.937Z"
+    },
+    {
+      "id": "judge-1",
+      "name": "د. سامي الأحمد",
+      "email": "judge@hackathon.com",
+      "password": "judge",
+      "role": "judge",
+      "specialty": "محكم بيئي وتقني",
+      "createdAt": "2026-10-07T22:13:02.937Z"
+    },
+    {
+      "id": "user-participant-1",
+      "name": "أحمد خليل",
+      "email": "ahmed@hackathon.com",
+      "password": "123",
+      "role": "participant",
+      "teamId": "team-1",
+      "phone": "0599000000",
+      "createdAt": "2026-10-07T22:15:00.000Z"
+    },
+    {
+      "id": "user-participant-2",
+      "name": "متسابق الهاكاثون",
+      "email": "participant@hackathon.com",
+      "password": "123",
+      "role": "participant",
+      "teamId": "team-1",
+      "phone": "0599111111",
+      "createdAt": "2026-10-07T22:16:00.000Z"
+    },
+    {
+      "id": "judge-1791413548284",
+      "name": "سامي",
+      "email": "kareemsaleh532@gmail.com",
+      "password": "100200",
+      "role": "judge",
+      "specialty": "محكم بيئي وتقني",
+      "createdAt": "2026-10-07T22:52:28.284Z"
+    }
+  ],
+  "teams": [
+    {
+      "id": "team-1",
+      "name": "فريق الاستدامة الخضراء",
+      "description": "حلول ذكية لخفض الانبعاثات وإدارة الموارد الطبيعية",
+      "maxMembers": 5,
+      "track": "المناخ والبيئة",
+      "createdAt": "2026-10-07T22:13:02.937Z"
+    },
+    {
+      "id": "team-2",
+      "name": "فريق الطاقة النظيفة",
+      "description": "تطبيقات برمجية لتحسين كفاءة الطاقة المتجددة",
+      "maxMembers": 4,
+      "track": "الطاقة النظيفة",
+      "createdAt": "2026-10-07T22:13:02.937Z"
+    }
+  ],
+  "challenges": [
+    {
+      "id": "ch-1",
+      "title": "رصد وتحييد الانبعاثات الكربونية في المنشآت",
+      "track": "خفض الانبعاثات والحياد الصفري",
+      "description": "تطوير أدوات برمجية دقيقة تجمع البيانات الميدانية وتقيس غازات الاحتباس الحراري مع اقتراح خطط بديلة مستدامة.",
+      "targetImpact": "تقليل البصمة الكربونية بنسبة لا تقل عن 20% ورفع كفاءة استهلاك الطاقة.",
+      "deliverables": [
+        "لوحة معلومات تفاعلية لحساب الانبعاثات",
+        "خوارزمية تنبؤية باستهلاك الطاقة المستقبلي",
+        "واجهة برمجة تطبيقات API للربط مع المستشعرات"
+      ],
+      "createdAt": "2026-10-07T22:13:02.937Z"
+    },
+    {
+      "id": "ch-2",
+      "title": "إدارة الموارد المائية والتكيف مع الجفاف",
+      "track": "المياه والتكيف مع التغير المناخي",
+      "description": "ابتكار نظام ذكي لإدارة شبكات الري أو التوزيع المائي مع استشعار تسريبات المياه والتنبؤ بالجفاف الموسمي.",
+      "targetImpact": "توفير ما يصل إلى 35% من استهلاك المياه في القطاع الزراعي والحضري.",
+      "deliverables": [
+        "نموذج أولي لنظام التحكم بالري الذكي",
+        "تطبيق جوال أو لوحة تحكم للمزارعين",
+        "دراسة أثر بيئي وجدوى استهلاك"
+      ],
+      "createdAt": "2026-10-07T22:13:02.937Z"
+    }
+  ],
+  "criteria": [
+    {
+      "id": "crit-1",
+      "name": "الأثر البيئي والمناخي",
+      "description": "مدى فاعلية الحل المقترح في معالجة قضية بيئية حقيقية وتحقيق استدامة بيئية ملموسة.",
+      "maxScore": 30,
+      "weight": 30
+    },
+    {
+      "id": "crit-2",
+      "name": "الابتكار والحل التقني",
+      "description": "أصالة الفكرة وجودة المعمارية البرمجية والحل التكنولوجي.",
+      "maxScore": 25,
+      "weight": 25
+    },
+    {
+      "id": "crit-3",
+      "name": "قابلية التطبيق والاستدامة",
+      "description": "إمكانية تنفيذ المشروع على أرض الواقع واستمراريته كنموذج عمل مستدام.",
+      "maxScore": 25,
+      "weight": 25
+    },
+    {
+      "id": "crit-4",
+      "name": "جودة العرض والنموذج الأولي",
+      "description": "اكتمال النموذج الأولي العامل، ووضوح العرض وتكامل تجربة الاستخدام.",
+      "maxScore": 20,
+      "weight": 20
+    }
+  ],
+  "submissions": [
+    {
+      "id": "sub-1",
+      "teamId": "team-1",
+      "teamName": "فريق الاستدامة الخضراء",
+      "challengeId": "ch-1",
+      "challengeTitle": "رصد وتحييد الانبعاثات الكربونية في المنشآت",
+      "projectTitle": "منصة إيكو-تراك (EcoTrack) للحياد الكربوني",
+      "summary": "نظام ذكي متكامل يعتمد على الذكاء الاصطناعي وإنترنت الأشياء لرصد وتحليل البصمة الكربونية للمصانع والمنشآت لحظياً مع اقتراح إجراءات فورية لخفض الانبعاثات وترشيد استهلاك الطاقة.",
+      "environmentalImpact": "يساهم في خفض الانبعاثات بنسبة 28% وتوفير الطاقة بنسبة 35% في أول 6 أشهر.",
+      "demoUrl": "https://ecotrack-demo.vercel.app",
+      "repoUrl": "https://github.com/green-team/ecotrack",
+      "presentationUrl": "https://slides.com/green-team/pitch",
+      "submittedByUserId": "user-participant-1",
+      "submittedByUserName": "أحمد خليل",
+      "submittedAt": "2026-10-08T01:30:00.000Z"
+    }
+  ],
+  "evaluations": [
+    {
+      "id": "eval-1791413605675",
+      "submissionId": "sub-1",
+      "teamId": "team-1",
+      "judgeId": "judge-1791413548284",
+      "judgeName": "سامي",
+      "scores": {
+        "crit-1": 24,
+        "crit-2": 20,
+        "crit-3": 20,
+        "crit-4": 16
+      },
+      "totalScore": 80,
+      "feedback": "",
+      "evaluatedAt": "2026-10-07T22:53:25.676Z"
+    }
+  ],
+  "settings": {
+    "isSubmissionOpen": true,
+    "announcement": ""
+  }
+}
