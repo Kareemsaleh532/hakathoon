@@ -26,11 +26,10 @@ export default function Navbar() {
     };
 
     fetchStatus();
-    const interval = setInterval(fetchStatus, 6000);
+    const interval = setInterval(fetchStatus, 4000);
     return () => clearInterval(interval);
   }, []);
 
-  // Close mobile menu on route change
   useEffect(() => {
     setMobileMenuOpen(false);
   }, [pathname]);
@@ -49,11 +48,11 @@ export default function Navbar() {
       <div className="container nav-container">
         <div className="brand-group">
           <Link href="/" className="brand-title">
-            هاكاثون
+            GREENOVATE
           </Link>
-          <span className="brand-tag">البيئة والتغير المناخي</span>
+          <span className="brand-tag">HACKATHON</span>
           
-          {user && isSubmissionOpen !== null && (
+          {isSubmissionOpen !== null && (
             <div className={`status-pill ${isSubmissionOpen ? 'open' : 'closed'}`}>
               <span className={`status-dot ${isSubmissionOpen ? 'green' : 'red'}`}></span>
               <span>{isSubmissionOpen ? 'التسليم متاح' : 'التسليم مغلق'}</span>
@@ -61,105 +60,69 @@ export default function Navbar() {
           )}
         </div>
 
-        {/* Hamburger button - visible only on mobile */}
+        {/* Mobile menu trigger - pure text, zero icons */}
         <button 
           className="hamburger-btn"
           onClick={toggleMobileMenu}
           aria-label="القائمة"
           type="button"
         >
-          {mobileMenuOpen ? '✕' : '☰'}
+          {mobileMenuOpen ? 'إغلاق القائمة' : 'القائمة'}
         </button>
 
-        {/* Dynamic navigation links depending on authentication & role */}
-        {user ? (
-          <nav className={`nav-links ${mobileMenuOpen ? 'mobile-open' : ''}`}>
+        {/* Navigation links based on role */}
+        <nav className={`nav-links ${mobileMenuOpen ? 'mobile-open' : ''}`}>
+          <Link 
+            href="/" 
+            className={`nav-link ${pathname === '/' ? 'active' : ''}`}
+          >
+            الرئيسية
+          </Link>
+
+          {user && user.role === 'participant' && (
             <Link 
-              href="/" 
-              className={`nav-link ${pathname === '/' ? 'active' : ''}`}
+              href="/submit" 
+              className={`nav-link ${pathname === '/submit' ? 'active' : ''}`}
             >
-              الرئيسية
+              صفحة تسليم المشروع
             </Link>
-            
+          )}
+
+          {user && user.role === 'judge' && (
             <Link 
-              href="/challenges" 
-              className={`nav-link ${pathname === '/challenges' ? 'active' : ''}`}
+              href="/judge" 
+              className={`nav-link ${pathname === '/judge' ? 'active' : ''}`}
             >
-              صفحة التحديات
+              صفحة تحكيم المشاريع
             </Link>
+          )}
 
-            {/* ONLY participant sees the submission portal */}
-            {user.role === 'participant' && (
-              <>
-                <Link 
-                  href="/participants" 
-                  className={`nav-link ${pathname === '/participants' ? 'active' : ''}`}
-                >
-                  صفحة المشاركين وفريقي
-                </Link>
-                <Link 
-                  href="/submit" 
-                  className={`nav-link ${pathname === '/submit' ? 'active' : ''}`}
-                >
-                  صفحة التسليم
-                </Link>
-              </>
-            )}
-
-            {/* Judge portal */}
-            {user.role === 'judge' && (
-              <Link 
-                href="/judge" 
-                className={`nav-link ${pathname === '/judge' ? 'active' : ''}`}
-              >
-                صفحة الحكام والتقييم
-              </Link>
-            )}
-
-            {/* Admin portal */}
-            {user.role === 'admin' && (
-              <Link 
-                href="/admin" 
-                className={`nav-link ${pathname === '/admin' ? 'active' : ''}`}
-              >
-                صفحة الادمن
-              </Link>
-            )}
-
-            {/* Mobile-only logout button inside menu */}
-            <button
-              onClick={handleLogout}
-              className="nav-link"
-              style={{ background: 'transparent', border: 'none', cursor: 'pointer', color: '#f87171', fontWeight: 600, textAlign: 'right', display: 'none' }}
+          {user && user.role === 'admin' && (
+            <Link 
+              href="/admin" 
+              className={`nav-link ${pathname === '/admin' ? 'active' : ''}`}
             >
-              تسجيل الخروج
-            </button>
-          </nav>
-        ) : (
-          <nav className={`nav-links ${mobileMenuOpen ? 'mobile-open' : ''}`}>
-            <span style={{ fontSize: '0.85rem', color: 'var(--text-dim)' }}>
-              يرجى تسجيل الدخول للوصول إلى النظام
-            </span>
-          </nav>
-        )}
+              صفحة الادمن
+            </Link>
+          )}
+        </nav>
 
         <div className="nav-user-status">
           {user ? (
             <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
               <span className="badge badge-emerald">
-                {user.role === 'admin' ? 'الادمن' : user.role === 'judge' ? 'حكم' : 'متسابق'}: {user.name}
+                {user.role === 'admin' ? 'الإدارة' : user.role === 'judge' ? 'المحكّم' : 'فريق'}: {user.name}
               </span>
               <button 
                 onClick={handleLogout} 
                 className="btn btn-outline btn-sm"
-                title="تسجيل الخروج"
               >
                 تسجيل الخروج
               </button>
             </div>
           ) : (
             <Link href="/" className="btn btn-primary btn-sm">
-              تسجيل الدخول / حساب جديد
+              تسجيل الدخول
             </Link>
           )}
         </div>

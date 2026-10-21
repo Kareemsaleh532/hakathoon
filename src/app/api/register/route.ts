@@ -24,10 +24,11 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: 'الفريق المحدد غير موجود' }, { status: 404 });
     }
 
+    const maxLimit = team.maxMembers ?? 10;
     // Check team capacity
     const currentTeamMembers = db.users.filter(u => u.teamId === teamId);
-    if (currentTeamMembers.length >= team.maxMembers) {
-      return NextResponse.json({ error: `الفريق مكتمل! الحد الأقصى للأعضاء هو ${team.maxMembers}` }, { status: 400 });
+    if (currentTeamMembers.length >= maxLimit) {
+      return NextResponse.json({ error: `الفريق مكتمل! الحد الأقصى للأعضاء هو ${maxLimit}` }, { status: 400 });
     }
 
     const newUser: User & { password?: string } = {

@@ -15,8 +15,8 @@ export interface DatabaseSchema {
 const DATA_DIR = path.join(process.cwd(), 'data');
 const DB_FILE = path.join(DATA_DIR, 'db.json');
 
-// Fresh clean initial database
-const initialDatabase: DatabaseSchema = {
+// Fresh clean initial database - no fake data, only initial admin user
+export const initialDatabase: DatabaseSchema = {
   users: [
     {
       id: 'admin-1',
@@ -25,134 +25,44 @@ const initialDatabase: DatabaseSchema = {
       password: 'admin',
       role: 'admin',
       createdAt: new Date().toISOString(),
-    },
-    {
-      id: 'judge-1',
-      name: 'د. سامي الأحمد',
-      email: 'judge@hackathon.com',
-      password: 'judge',
-      role: 'judge',
-      specialty: 'محكم بيئي وتقني',
-      createdAt: new Date().toISOString(),
-    },
-    {
-      id: 'user-participant-1',
-      name: 'أحمد خليل',
-      email: 'ahmed@hackathon.com',
-      password: '123',
-      role: 'participant',
-      teamId: 'team-1',
-      phone: '0599000000',
-      createdAt: new Date().toISOString(),
-    },
-    {
-      id: 'user-participant-2',
-      name: 'متسابق الهاكاثون',
-      email: 'participant@hackathon.com',
-      password: '123',
-      role: 'participant',
-      teamId: 'team-1',
-      phone: '0599111111',
-      createdAt: new Date().toISOString(),
     }
   ],
-  teams: [
-    {
-      id: 'team-1',
-      name: 'فريق الاستدامة الخضراء',
-      description: 'حلول ذكية لخفض الانبعاثات وإدارة الموارد الطبيعية',
-      maxMembers: 5,
-      track: 'المناخ والبيئة',
-      createdAt: new Date().toISOString(),
-    },
-    {
-      id: 'team-2',
-      name: 'فريق الطاقة النظيفة',
-      description: 'تطبيقات برمجية لتحسين كفاءة الطاقة المتجددة',
-      maxMembers: 4,
-      track: 'الطاقة النظيفة',
-      createdAt: new Date().toISOString(),
-    }
-  ],
-  challenges: [
-    {
-      id: 'ch-1',
-      title: 'رصد وتحييد الانبعاثات الكربونية في المنشآت',
-      track: 'خفض الانبعاثات والحياد الصفري',
-      description: 'تطوير أدوات برمجية دقيقة تجمع البيانات الميدانية وتقيس غازات الاحتباس الحراري مع اقتراح خطط بديلة مستدامة.',
-      targetImpact: 'تقليل البصمة الكربونية بنسبة لا تقل عن 20% ورفع كفاءة استهلاك الطاقة.',
-      deliverables: [
-        'لوحة معلومات تفاعلية لحساب الانبعاثات',
-        'خوارزمية تنبؤية باستهلاك الطاقة المستقبلي',
-        'واجهة برمجة تطبيقات API للربط مع المستشعرات'
-      ],
-      createdAt: new Date().toISOString(),
-    },
-    {
-      id: 'ch-2',
-      title: 'إدارة الموارد المائية والتكيف مع الجفاف',
-      track: 'المياه والتكيف مع التغير المناخي',
-      description: 'ابتكار نظام ذكي لإدارة شبكات الري أو التوزيع المائي مع استشعار تسريبات المياه والتنبؤ بالجفاف الموسمي.',
-      targetImpact: 'توفير ما يصل إلى 35% من استهلاك المياه في القطاع الزراعي والحضري.',
-      deliverables: [
-        'نموذج أولي لنظام التحكم بالري الذكي',
-        'تطبيق جوال أو لوحة تحكم للمزارعين',
-        'دراسة أثر بيئي وجدوى استهلاك'
-      ],
-      createdAt: new Date().toISOString(),
-    }
-  ],
+  teams: [],
+  challenges: [],
   criteria: [
     {
       id: 'crit-1',
-      name: 'الأثر البيئي والمناخي',
-      description: 'مدى فاعلية الحل المقترح في معالجة قضية بيئية حقيقية وتحقيق استدامة بيئية ملموسة.',
-      maxScore: 30,
-      weight: 30,
+      name: 'أصالة الفكرة والابتكار',
+      description: 'مدى جدة الفكرة وابتكار الحل المقدم وتميزه عن الحلول التقليدية.',
+      maxScore: 25,
+      weight: 25,
     },
     {
       id: 'crit-2',
-      name: 'الابتكار والحل التقني',
-      description: 'أصالة الفكرة وجودة المعمارية البرمجية والحل التكنولوجي.',
+      name: 'جودة التنفيذ والحل التقني',
+      description: 'اكتمال العمل التقني وجودة بناء المشروع وقابليته للعمل.',
       maxScore: 25,
       weight: 25,
     },
     {
       id: 'crit-3',
-      name: 'قابلية التطبيق والاستدامة',
-      description: 'إمكانية تنفيذ المشروع على أرض الواقع واستمراريته كنموذج عمل مستدام.',
+      name: 'الأثر والجدوى الواقعية',
+      description: 'الأثر البيئي/المجتمعي وإمكانية تطبيق المشروع واستدامته على أرض الواقع.',
       maxScore: 25,
       weight: 25,
     },
     {
       id: 'crit-4',
-      name: 'جودة العرض والنموذج الأولي',
-      description: 'اكتمال النموذج الأولي العامل، ووضوح العرض وتكامل تجربة الاستخدام.',
-      maxScore: 20,
-      weight: 20,
+      name: 'جودة العرض والتسليم',
+      description: 'وضوح الملفات المسلّمة وتنظيم الأفكار وشمولية التسليم.',
+      maxScore: 25,
+      weight: 25,
     }
   ],
-  submissions: [
-    {
-      id: 'sub-1',
-      teamId: 'team-1',
-      teamName: 'فريق الاستدامة الخضراء',
-      challengeId: 'ch-1',
-      challengeTitle: 'رصد وتحييد الانبعاثات الكربونية في المنشآت',
-      projectTitle: 'منصة إيكو-تراك (EcoTrack) للحياد الكربوني',
-      summary: 'نظام ذكي متكامل يعتمد على الذكاء الاصطناعي وإنترنت الأشياء لرصد وتحليل البصمة الكربونية للمصانع والمنشآت لحظياً مع اقتراح إجراءات فورية لخفض الانبعاثات.',
-      environmentalImpact: 'يساهم في خفض الانبعاثات بنسبة 28% وتوفير الطاقة بنسبة 35% في أول 6 أشهر.',
-      demoUrl: 'https://ecotrack-demo.vercel.app',
-      repoUrl: 'https://github.com/green-team/ecotrack',
-      presentationUrl: 'https://slides.com/green-team/pitch',
-      submittedByUserId: 'user-participant-1',
-      submittedByUserName: 'أحمد خليل',
-      submittedAt: new Date().toISOString(),
-    }
-  ],
+  submissions: [],
   evaluations: [],
   settings: {
-    isSubmissionOpen: true,
+    isSubmissionOpen: false,
     announcement: ''
   }
 };

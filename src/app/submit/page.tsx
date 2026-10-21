@@ -1,43 +1,43 @@
 'use client';
 
-import React, { useState, useEffect, Suspense } from 'react';
-import { useSearchParams, useRouter } from 'next/navigation';
+import React, { useState, useEffect, useRef } from 'react';
 import Link from 'next/link';
 import { useAuth } from '@/context/AuthContext';
-import { Challenge, Submission, Team } from '@/types';
+import { Submission } from '@/types';
 
-function SubmissionContent() {
-  const router = useRouter();
-  const searchParams = useSearchParams();
-  const preselectedChallengeId = searchParams.get('challengeId') || '';
+export default function SubmitPage() {
   const { user } = useAuth();
 
   const [isSubmissionOpen, setIsSubmissionOpen] = useState<boolean | null>(null);
-  const [challenges, setChallenges] = useState<Challenge[]>([]);
-  const [myTeam, setMyTeam] = useState<Team | null>(null);
+  const [loading, setLoading] = useState(true);
 
   // Form fields
-  const [challengeId, setChallengeId] = useState(preselectedChallengeId);
+  const [teamName, setTeamName] = useState('');
+  const [members, setMembers] = useState('');
   const [projectTitle, setProjectTitle] = useState('');
   const [summary, setSummary] = useState('');
-  const [environmentalImpact, setEnvironmentalImpact] = useState('');
+  const [fileUrl, setFileUrl] = useState('');
+  const [fileName, setFileName] = useState('');
+  const [fileSize, setFileSize] = useState<number>(0);
+  const [fileLink, setFileLink] = useState('');
   const [demoUrl, setDemoUrl] = useState('');
-  const [repoUrl, setRepoUrl] = useState('');
-  const [presentationUrl, setPresentationUrl] = useState('');
 
-  // Status & messages
-  const [loading, setLoading] = useState(true);
-  const [isSubmitting, setIsSubmitting] = useState(false);
+  // Uploading state
+  const [isUploading, setIsUploading] = useState(false);
+  const [uploadError, setUploadError] = useState('');
+  const fileInputRef = useRef<HTMLInputElement | null>(null);
+
+  // Submission state
   const [existingSubmission, setExistingSubmission] = useState<Submission | null>(null);
-  const [notification, setNotification] = useState<{ text: string; type: 'success' | 'error' } | null>(null);
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [message, setMessage] = useState<{ text: string; type: 'success' | 'error' } | null>(null);
 
-  const fetchData = async () => {
+  // Fetch status and existing submission
+  const loadData = async () => {
     setLoading(true);
     try {
-      const [settingsRes, challengesRes, teamsRes, subsRes] = await Promise.all([
+      const [settingsRes, subsRes] = await Promise.all([
         fetch('/api/settings'),
-        fetch('/api/challenges'),
-        fetch('/api/teams'),
         fetch('/api/submissions')
       ]);
 
@@ -46,34 +46,28 @@ function SubmissionContent() {
         setIsSubmissionOpen(settings.isSubmissionOpen);
       }
 
-      if (challengesRes.ok) {
-        const chList = await challengesRes.json();
-        setChallenges(chList);
-        if (!challengeId && chList.length > 0) {
-          setChallengeId(chList[0].id);
-        }
-      }
+      if (subsRes.ok && user) {
+        const allSubs: Submission[] = await subsRes.json();
+        const mySub = allSubs.find(
+          s => s.submittedByUserId === user.id || 
+               (user.name && s.teamName && s.teamName.trim().toLowerCase() === user.name.trim().toLowerCase())
+        );
 
-      if (teamsRes.ok && user && user.teamId) {
-        const tList: Team[] = await teamsRes.json();
-        const userTeam = tList.find(t => t.id === user.teamId);
-        if (userTeam) {
-          setMyTeam(userTeam);
-        }
-      }
-
-      if (subsRes.ok && user && user.teamId) {
-        const subs: Submission[] = await subsRes.json();
-        const found = subs.find(s => s.teamId === user.teamId);
-        if (found) {
-          setExistingSubmission(found);
-          setProjectTitle(found.projectTitle);
-          setChallengeId(found.challengeId);
-          setSummary(found.summary);
-          setEnvironmentalImpact(found.environmentalImpact);
-          setDemoUrl(found.demoUrl || '');
-          setRepoUrl(found.repoUrl || '');
-          setPresentationUrl(found.presentationUrl || '');
+        if (mySub) {
+          setExistingSubmission(mySub);
+          setTeamName(mySub.teamName || '');
+          setMembers(mySub.members || '');
+          setProjectTitle(mySub.projectTitle || '');
+          setSummary(mySub.summary || '');
+          setFileUrl(mySub.fileUrl || '');
+          setFileName(mySub.fileName || '');
+          setFileSize(mySub.fileSize || 0);
+          setFileLink(mySub.fileLink || '');
+          setDemoUrl(mySub.demoUrl || '');
+        } else {
+          if (user.role === 'participant') {
+            setTeamName(user.name || '');
+          }
         }
       }
     } catch (err) {
@@ -84,21 +78,75 @@ function SubmissionContent() {
   };
 
   useEffect(() => {
-    fetchData();
+    loadData();
   }, [user]);
 
-  // Form submission
+  // Handle direct file upload
+  const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    setIsUploading(true);
+    setUploadError('');
+
+    try {
+      const formData = new FormData();
+      formData.append('file', file);
+
+      const res = await fetch('/api/upload', {
+        method: 'POST',
+        body: formData,
+      });
+
+      const data = await res.json();
+      if (!res.ok) {
+        setUploadError(data.error || 'فشل رفع الملف');
+      } else {
+        setFileUrl(data.url);
+        setFileName(data.fileName);
+        setFileSize(data.fileSize);
+      }
+    } catch {
+      setUploadError('حدث خطأ أثناء رفع الملف');
+    } finally {
+      setIsUploading(false);
+    }
+  };
+
+  const handleRemoveFile = () => {
+    setFileUrl('');
+    setFileName('');
+    setFileSize(0);
+    if (fileInputRef.current) {
+      fileInputRef.current.value = '';
+    }
+  };
+
+  // Format file size
+  const formatBytes = (bytes: number) => {
+    if (!bytes) return '';
+    const sizes = ['Bytes', 'KB', 'MB', 'GB'];
+    const i = Math.floor(Math.log(bytes) / Math.log(1024));
+    return `${(bytes / Math.pow(1024, i)).toFixed(1)} ${sizes[i]}`;
+  };
+
+  // Submit / Update
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    setNotification(null);
+    setMessage(null);
 
-    if (!user || user.role !== 'participant') {
-      setNotification({ text: 'التسليم متاح فقط للمتسابقين المسجلين', type: 'error' });
+    if (!user) {
+      setMessage({ text: 'يجب تسجيل الدخول لتسليم المشروع', type: 'error' });
       return;
     }
 
-    if (!user.teamId) {
-      setNotification({ text: 'يجب أن تكون منضماً إلى فريق لتسليم المشروع', type: 'error' });
+    if (!teamName.trim() || !members.trim() || !projectTitle.trim()) {
+      setMessage({ text: 'يرجى كتابة اسم التيم، وأسماء الأعضاء، واسم المشروع', type: 'error' });
+      return;
+    }
+
+    if (!fileUrl && !fileLink.trim() && !demoUrl.trim()) {
+      setMessage({ text: 'يرجى تسليم الملف المطلوب (برفع ملف أو وضع رابط الملف)', type: 'error' });
       return;
     }
 
@@ -109,25 +157,30 @@ function SubmissionContent() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           userId: user.id,
-          challengeId,
+          teamName,
+          members,
           projectTitle,
           summary,
-          environmentalImpact,
+          fileUrl,
+          fileName,
+          fileSize,
+          fileLink,
           demoUrl,
-          repoUrl,
-          presentationUrl,
         })
       });
 
       const data = await res.json();
       if (!res.ok) {
-        setNotification({ text: data.error || 'فشل تسليم المشروع', type: 'error' });
+        setMessage({ text: data.error || 'فشل تسليم المشروع', type: 'error' });
       } else {
         setExistingSubmission(data);
-        setNotification({ text: 'تم تسليم المشروع بنجاح باسم فريقك!', type: 'success' });
+        setMessage({
+          text: existingSubmission ? 'تم تحديث وحفظ بيانات التسليم بنجاح' : 'تم تسليم المشروع بنجاح إلى لجنة التحكيم والإدارة',
+          type: 'success'
+        });
       }
     } catch {
-      setNotification({ text: 'تعذر الاتصال بالخادم', type: 'error' });
+      setMessage({ text: 'تعذر الاتصال بالخادم، يرجى المحاولة لاحقاً', type: 'error' });
     } finally {
       setIsSubmitting(false);
     }
@@ -135,99 +188,74 @@ function SubmissionContent() {
 
   if (loading) {
     return (
-      <div className="container" style={{ textAlign: 'center', padding: '80px 0', color: 'var(--text-dim)' }}>
-        جار التحقق من بيانات التسليم...
+      <div className="container" style={{ textAlign: 'center', padding: '100px 0', color: 'var(--text-dim)' }}>
+        جار التحميل والتحقق من حالة التسليم...
       </div>
     );
   }
 
-  // 1. If not logged in as a participant
-  if (!user || user.role !== 'participant') {
+  // Not logged in
+  if (!user) {
     return (
-      <div className="container" style={{ maxWidth: '600px', paddingTop: '60px' }}>
+      <div className="container" style={{ maxWidth: '540px', paddingTop: '60px' }}>
         <div className="card" style={{ textAlign: 'center', padding: '40px 24px' }}>
-          <h2 style={{ fontSize: '1.4rem', fontWeight: 700, marginBottom: '12px' }}>
-            صفحة التسليم مخصصة للمتسابقين فقط
+          <h2 style={{ fontSize: '1.4rem', fontWeight: 800, marginBottom: '12px', color: 'var(--primary)' }}>
+            صفحة تسليم المشاريع للفرق
           </h2>
-          <p style={{ color: 'var(--text-dim)', marginBottom: '24px' }}>
-            يرجى تسجيل الدخول بحساب متسابق منضم لفريق لتتمكن من تسليم مشروع فريقك.
+          <p style={{ color: 'var(--text-dim)', marginBottom: '24px', fontSize: '0.92rem' }}>
+            يرجى تسجيل الدخول بحساب فريقك المعتمد لتتمكن من تسليم الملف المطلوب وتعديل البيانات.
           </p>
-          <div style={{ display: 'flex', gap: '10px', justifyContent: 'center' }}>
-            <Link href="/" className="btn btn-primary">
-              تسجيل الدخول كمتسابق
-            </Link>
-            <Link href="/challenges" className="btn btn-outline">
-              صفحة التحديات
-            </Link>
-          </div>
+          <Link href="/" className="btn btn-primary">
+            الانتقال لتسجيل الدخول
+          </Link>
         </div>
       </div>
     );
   }
 
-  // 2. If submission is closed by admin
-  if (!isSubmissionOpen) {
-    return (
-      <div className="container" style={{ maxWidth: '700px', paddingTop: '60px' }}>
-        <div className="card" style={{ textAlign: 'center', padding: '40px 24px' }}>
-          <div style={{ marginBottom: '16px' }}>
-            <span className="badge badge-amber" style={{ padding: '6px 14px' }}>
-              بوابة التسليم مغلقة حالياً من قبل الادمن
-            </span>
-          </div>
-
-          <h1 style={{ fontSize: 'clamp(1.2rem, 3.5vw, 1.8rem)', fontWeight: 800, marginBottom: '14px', color: '#f8fafc' }}>
-            التسليم غير متاح حالياً
-          </h1>
-
-          <p style={{ color: 'var(--text-dim)', fontSize: '0.95rem', lineHeight: 1.7, marginBottom: '24px', maxWidth: '540px', margin: '0 auto 24px' }}>
-            صفحة التسليم لا تفتح إلا عند تفعيلها رسمياً من قِبل إدارة الهاكاثون. يمكنك استكمال تجهيز روابط المشروع والكود مع فريقك حتى يتم فتح البوابة.
-          </p>
-
-          <div style={{ display: 'flex', gap: '12px', justifyContent: 'center' }}>
-            <Link href="/challenges" className="btn btn-secondary">
-              صفحة التحديات
-            </Link>
-            <Link href="/participants" className="btn btn-outline">
-              صفحة فريقي
-            </Link>
-            <button onClick={fetchData} className="btn btn-primary">
-              إعادة التحقق من الحالة
-            </button>
-          </div>
-        </div>
-      </div>
-    );
-  }
-
-  // 3. Open and participant logged in
   return (
-    <div className="container" style={{ maxWidth: '800px', paddingTop: '30px' }}>
+    <div className="container" style={{ maxWidth: '780px', paddingTop: '36px', paddingBottom: '60px' }}>
+      {/* Header */}
       <div style={{ textAlign: 'center', marginBottom: '24px' }}>
-        <span className="badge badge-emerald" style={{ marginBottom: '6px' }}>
-          بوابة التسليم مفتوحة
-        </span>
-        <h1 style={{ fontSize: 'clamp(1.4rem, 4vw, 2rem)', fontWeight: 800, color: '#ffffff' }}>
-          تسليم المشروع النهائي للفريق
+        <div style={{ display: 'inline-flex', marginBottom: '8px' }}>
+          <span className={`status-pill ${isSubmissionOpen ? 'open' : 'closed'}`}>
+            <span className={`status-dot ${isSubmissionOpen ? 'green' : 'red'}`}></span>
+            {isSubmissionOpen ? 'بوابة التسليم متاحة الآن' : 'بوابة التسليم مغلقة حالياً'}
+          </span>
+        </div>
+        <h1 style={{ fontSize: 'clamp(1.4rem, 4vw, 2.2rem)', fontWeight: 900, color: 'var(--primary)', marginBottom: '4px' }}>
+          GREENOVATE HACKATHON
         </h1>
-        <p style={{ color: 'var(--text-dim)', fontSize: '0.9rem' }}>
-          سيتم ربط هذا التسليم تلقائياً بفريقك المسجل وسيظهر للجنة التحكيم وصفحة الادمن
+        <p style={{ color: 'var(--text-dim)', fontSize: '0.95rem', fontWeight: 600 }}>
+          تسليم المشروع والمخرجات المطلوبة للفريق
         </p>
       </div>
 
-      {notification && (
-        <div className={`alert ${notification.type === 'success' ? 'alert-info' : 'alert-danger'}`}>
-          <span>{notification.text}</span>
+      {message && (
+        <div className={`alert ${message.type === 'success' ? 'alert-info' : 'alert-danger'}`} style={{ marginBottom: '20px' }}>
+          <span>{message.text}</span>
         </div>
       )}
 
-      <div className="card">
-        {/* Team auto-association banner */}
+      {/* Submission Closed Alert - Zero Icons */}
+      {!isSubmissionOpen && (
+        <div className="alert alert-danger" style={{ marginBottom: '24px', padding: '16px 20px', display: 'flex', flexDirection: 'column', gap: '6px' }}>
+          <strong style={{ fontSize: '0.95rem' }}>
+            تنبيه: بوابة التسليم مغلقة حالياً من قِبل إدارة الهاكاثون
+          </strong>
+          <span style={{ fontSize: '0.88rem', lineHeight: 1.6 }}>
+            خانة التسليم والتعديل يتم فتحها وإغلاقها حصرياً من حساب الادمن. لا يمكنك إرسال تسليم جديد أو تعديل التسليم الحالي حتى يتم تفعيل البوابة.
+          </span>
+        </div>
+      )}
+
+      {/* Existing Submission Indicator - Zero Icons */}
+      {existingSubmission && (
         <div style={{
+          background: 'var(--beige-accent)',
+          border: '1.5px solid var(--border-color)',
+          borderRadius: '6px',
           padding: '14px 18px',
-          background: 'var(--bg-input)',
-          borderRadius: '8px',
-          border: '1px solid var(--border-color)',
           marginBottom: '20px',
           display: 'flex',
           justifyContent: 'space-between',
@@ -236,134 +264,244 @@ function SubmissionContent() {
           gap: '10px'
         }}>
           <div>
-            <div style={{ fontSize: '0.8rem', color: 'var(--text-dim)' }}>فريقك المسجل تلقائياً:</div>
-            <strong style={{ fontSize: '1.1rem', color: '#22c55e' }}>
-              {myTeam ? myTeam.name : 'فريقك المعتمد'}
-            </strong>
+            <span className="badge badge-emerald" style={{ marginBottom: '4px' }}>مسلَّم ومحفوظ</span>
+            <div style={{ fontWeight: 800, color: 'var(--primary)' }}>
+              مشروع: {existingSubmission.projectTitle} (فريق: {existingSubmission.teamName})
+            </div>
+            <div style={{ fontSize: '0.8rem', color: 'var(--text-dim)' }}>
+              تاريخ التسليم: {new Date(existingSubmission.updatedAt || existingSubmission.submittedAt).toLocaleString('ar-EG')}
+            </div>
           </div>
-          <div>
-            <div style={{ fontSize: '0.8rem', color: 'var(--text-dim)' }}>المتسابق المسلِّم:</div>
-            <strong style={{ color: '#f8fafc' }}>{user.name}</strong>
-          </div>
+          {isSubmissionOpen && (
+            <span style={{ fontSize: '0.85rem', color: 'var(--primary)', fontWeight: 700 }}>
+              يمكنك تعديل أي بيانات بالأسفل وحفظ التغييرات
+            </span>
+          )}
         </div>
+      )}
 
-        {existingSubmission && (
-          <div className="alert alert-info" style={{ marginBottom: '20px' }}>
-            <span>يوجد تسليم سابق محفوظ لفريقك. يمكنك تحديث البيانات وحفظ التعديلات أدناه.</span>
-          </div>
-        )}
-
+      {/* Focused Form */}
+      <div className="card" style={{ padding: '32px 28px' }}>
         <form onSubmit={handleSubmit}>
-          {/* Challenge Selection */}
+          {/* 1. اسم التيم */}
           <div className="form-group">
-            <label className="form-label">التحدي البيئي المرتبط بالمشروع *</label>
-            <select 
-              className="form-select"
-              value={challengeId}
-              onChange={e => setChallengeId(e.target.value)}
-              required
-            >
-              {challenges.map(ch => (
-                <option key={ch.id} value={ch.id}>
-                  [{ch.track}] {ch.title}
-                </option>
-              ))}
-            </select>
-          </div>
-
-          {/* Project Title */}
-          <div className="form-group">
-            <label className="form-label">اسم المشروع *</label>
+            <label className="form-label">
+              اسم التيم (الفريق) *
+            </label>
             <input 
               type="text" 
               className="form-control" 
-              placeholder="مثال: نظام الري الذكي بالاستشعار"
+              placeholder="مثال: فريق الرواد الأخضر"
+              value={teamName} 
+              onChange={e => setTeamName(e.target.value)} 
+              disabled={!isSubmissionOpen}
+              required 
+            />
+          </div>
+
+          {/* 2. الاعضاء */}
+          <div className="form-group">
+            <label className="form-label">
+              أعضاء التيم (اكتب أسماء أعضاء الفريق) *
+            </label>
+            <textarea 
+              className="form-textarea" 
+              style={{ minHeight: '75px' }}
+              placeholder="مثال: أحمد خليل، سارة مصطفى، كريم صالح، عمر حسن"
+              value={members} 
+              onChange={e => setMembers(e.target.value)} 
+              disabled={!isSubmissionOpen}
+              required 
+            />
+            <span className="form-hint">يرجى كتابة أسماء جميع أعضاء الفريق المشاركين في المشروع</span>
+          </div>
+
+          {/* 3. اسم المشروع */}
+          <div className="form-group">
+            <label className="form-label">
+              اسم / عنوان المشروع *
+            </label>
+            <input 
+              type="text" 
+              className="form-control" 
+              placeholder="مثال: نظام إدارة ومعالجة الانبعاثات الذكي"
               value={projectTitle} 
               onChange={e => setProjectTitle(e.target.value)} 
+              disabled={!isSubmissionOpen}
               required 
             />
           </div>
 
-          {/* Summary */}
+          {/* 4. تسليم الملف المطلوب - Zero Icons */}
+          <div className="form-group" style={{
+            padding: '18px',
+            background: 'var(--bg-body)',
+            borderRadius: '6px',
+            border: '1.5px solid var(--border-color)',
+            marginTop: '8px'
+          }}>
+            <label className="form-label" style={{ fontWeight: 800, fontSize: '0.98rem', color: 'var(--primary)', marginBottom: '4px' }}>
+              تسليم الملف المطلوب للمشروع *
+            </label>
+            <p style={{ fontSize: '0.82rem', color: 'var(--text-dim)', marginBottom: '14px' }}>
+              يمكنك رفع الملف مباشرة من جهازك (PDF، عرض تقديمي، ملف مضغوط، مستند) أو وضع رابط الملف بالأسفل.
+            </p>
+
+            {/* Direct File Upload Input - Zero Icons */}
+            <div style={{ marginBottom: '14px' }}>
+              <input 
+                type="file" 
+                ref={fileInputRef}
+                onChange={handleFileUpload}
+                disabled={!isSubmissionOpen || isUploading}
+                style={{ display: 'none' }}
+                id="file-upload-input"
+              />
+
+              {!fileUrl ? (
+                <label 
+                  htmlFor="file-upload-input"
+                  style={{
+                    display: 'flex',
+                    flexDirection: 'column',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    padding: '22px 16px',
+                    border: '2px dashed var(--primary)',
+                    borderRadius: '6px',
+                    cursor: isSubmissionOpen ? 'pointer' : 'not-allowed',
+                    background: '#FFFFFF',
+                    opacity: !isSubmissionOpen ? 0.6 : 1
+                  }}
+                >
+                  <span style={{ fontWeight: 700, color: 'var(--primary)', marginBottom: '4px', fontSize: '0.95rem' }}>
+                    {isUploading ? 'جار رفع الملف...' : 'اضغط هنا لرفع الملف المطلوب من جهازك'}
+                  </span>
+                  <span style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>
+                    يدعم جميع أنواع الملفات (PDF, PPTX, ZIP, DOCX...)
+                  </span>
+                </label>
+              ) : (
+                <div style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'space-between',
+                  padding: '12px 16px',
+                  background: 'var(--primary-subtle)',
+                  border: '1.5px solid var(--primary)',
+                  borderRadius: '6px',
+                  flexWrap: 'wrap',
+                  gap: '10px'
+                }}>
+                  <div>
+                    <div style={{ fontWeight: 800, color: 'var(--primary)', fontSize: '0.92rem' }}>
+                      {fileName || 'الملف المسلم'}
+                    </div>
+                    {fileSize > 0 && (
+                      <div style={{ fontSize: '0.78rem', color: 'var(--text-dim)' }}>
+                        الحجم: {formatBytes(fileSize)}
+                      </div>
+                    )}
+                  </div>
+
+                  <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
+                    <a 
+                      href={fileUrl} 
+                      download 
+                      target="_blank" 
+                      rel="noreferrer"
+                      className="btn btn-outline btn-sm"
+                    >
+                      تحميل ومعاينة الملف
+                    </a>
+                    {isSubmissionOpen && (
+                      <button 
+                        type="button" 
+                        onClick={handleRemoveFile}
+                        className="btn btn-danger btn-sm"
+                      >
+                        حذف وتغيير
+                      </button>
+                    )}
+                  </div>
+                </div>
+              )}
+
+              {uploadError && (
+                <div style={{ color: 'var(--danger)', fontSize: '0.85rem', marginTop: '6px', fontWeight: 600 }}>
+                  {uploadError}
+                </div>
+              )}
+            </div>
+
+            {/* External File Link */}
+            <div>
+              <label className="form-label" style={{ fontSize: '0.85rem' }}>
+                أو رابط خارجي للملف / المشروع (Google Drive / GitHub / OneDrive):
+              </label>
+              <input 
+                type="url" 
+                className="form-control" 
+                placeholder="https://drive.google.com/... أو https://github.com/..."
+                value={fileLink} 
+                onChange={e => setFileLink(e.target.value)} 
+                disabled={!isSubmissionOpen}
+              />
+            </div>
+          </div>
+
+          {/* 5. نبذة عن المشروع */}
           <div className="form-group">
-            <label className="form-label">ملخص الحل التقني والبرمجي *</label>
+            <label className="form-label">نبذة أو ملخص عن فكرة المشروع والحل (اختياري)</label>
             <textarea 
               className="form-textarea" 
-              placeholder="اشرح فكرة الحل وكيف يعالج المشكلة البيئية والتقنيات المستخدمة..."
+              style={{ minHeight: '80px' }}
+              placeholder="اكتب شرحاً مختصراً لفكرة المشروع، ما هي المشكلة وكيف يعالجها الحل..."
               value={summary} 
               onChange={e => setSummary(e.target.value)} 
-              required 
+              disabled={!isSubmissionOpen}
             />
           </div>
 
-          {/* Environmental Impact */}
+          {/* 6. رابط التجربة / Demo */}
           <div className="form-group">
-            <label className="form-label">الأثر البيئي والمناخي المتوقع *</label>
-            <textarea 
-              className="form-textarea" 
-              placeholder="نسبة تقليل الانبعاثات، كمية المياه الموفرة، الاستدامة..."
-              value={environmentalImpact} 
-              onChange={e => setEnvironmentalImpact(e.target.value)} 
-              required 
+            <label className="form-label">رابط تجربة حي / Demo URL (اختياري)</label>
+            <input 
+              type="url" 
+              className="form-control" 
+              placeholder="https://my-demo-project.com"
+              value={demoUrl} 
+              onChange={e => setDemoUrl(e.target.value)} 
+              disabled={!isSubmissionOpen}
             />
           </div>
 
-          {/* Links */}
-          <div className="grid-3">
-            <div className="form-group">
-              <label className="form-label">رابط النموذج (Demo URL)</label>
-              <input 
-                type="url" 
-                className="form-control" 
-                placeholder="https://..."
-                value={demoUrl} 
-                onChange={e => setDemoUrl(e.target.value)} 
-              />
-            </div>
-            <div className="form-group">
-              <label className="form-label">رابط مستودع الكود (GitHub)</label>
-              <input 
-                type="url" 
-                className="form-control" 
-                placeholder="https://github.com/..."
-                value={repoUrl} 
-                onChange={e => setRepoUrl(e.target.value)} 
-              />
-            </div>
-            <div className="form-group">
-              <label className="form-label">رابط العرض التقديمي</label>
-              <input 
-                type="url" 
-                className="form-control" 
-                placeholder="https://..."
-                value={presentationUrl} 
-                onChange={e => setPresentationUrl(e.target.value)} 
-              />
-            </div>
-          </div>
-
-          <div style={{ display: 'flex', gap: '12px', marginTop: '16px' }}>
+          {/* Action Button */}
+          <div style={{ marginTop: '24px' }}>
             <button 
               type="submit" 
-              className="btn btn-primary"
-              disabled={isSubmitting}
+              className="btn btn-primary" 
+              style={{
+                width: '100%',
+                height: '48px',
+                fontSize: '1rem',
+                fontWeight: 800,
+                opacity: !isSubmissionOpen ? 0.6 : 1,
+                cursor: !isSubmissionOpen ? 'not-allowed' : 'pointer'
+              }}
+              disabled={!isSubmissionOpen || isSubmitting || isUploading}
             >
-              {isSubmitting ? 'جار التسليم...' : existingSubmission ? 'تحديث تسليم المشروع' : 'تسليم المشروع الآن'}
+              {isSubmitting 
+                ? 'جار الحفظ والتسليم...' 
+                : !isSubmissionOpen 
+                  ? 'بوابة التسليم مغلقة حالياً من قبل الإدارة'
+                  : existingSubmission 
+                    ? 'حفظ وتحديث بيانات التسليم' 
+                    : 'تسليم المشروع الآن'}
             </button>
-            <Link href="/participants" className="btn btn-outline">
-              العودة لصفحة فريقي
-            </Link>
           </div>
         </form>
       </div>
     </div>
-  );
-}
-
-export default function SubmissionPage() {
-  return (
-    <Suspense fallback={<div className="container" style={{ padding: '60px 0', textAlign: 'center' }}>جار التحميل...</div>}>
-      <SubmissionContent />
-    </Suspense>
   );
 }

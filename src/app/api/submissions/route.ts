@@ -25,10 +25,14 @@ export async function POST(request: Request) {
 
     const {
       userId,
-      challengeId,
+      teamName,
+      members,
       projectTitle,
       summary,
-      environmentalImpact,
+      fileUrl,
+      fileName,
+      fileSize,
+      fileLink,
       demoUrl,
       repoUrl,
       presentationUrl,
@@ -36,59 +40,49 @@ export async function POST(request: Request) {
 
     if (!userId) {
       return NextResponse.json(
-        { error: 'يجب تسجيل الدخول لتسليم المشروع' },
+        { error: 'يجب تسجيل الدخول أولاً لتسليم المشروع' },
         { status: 401 }
       );
     }
 
     const user = db.users.find(u => u.id === userId);
     if (!user) {
-      return NextResponse.json(
-        { error: 'المستخدم غير موجود' },
-        { status: 404 }
-      );
+      return NextResponse.json({ error: 'المستخدم غير موجود' }, { status: 404 });
     }
 
-    if (user.role !== 'participant') {
+    if (!teamName || !members || !projectTitle) {
       return NextResponse.json(
-        { error: 'التسليم متاح فقط للمتسابقين' },
-        { status: 403 }
-      );
-    }
-
-    if (!user.teamId) {
-      return NextResponse.json(
-        { error: 'حسابك غير مرتبط بفريق. يرجى الانضمام إلى فريق أولاً' },
+        { error: 'اسم الفريق، أسماء الأعضاء، واسم المشروع حقول مطلوبة أساسية' },
         { status: 400 }
       );
     }
 
-    const team = db.teams.find(t => t.id === user.teamId);
-    const teamId = user.teamId;
-    const teamName = team ? team.name : 'فريق غير محدد';
-
-    if (!projectTitle || !summary || !challengeId) {
+    // Require either an uploaded file or a file link
+    if (!fileUrl && !fileLink && !repoUrl && !demoUrl) {
       return NextResponse.json(
-        { error: 'اسم المشروع والتحدي وملخص الحل حقول مطلوبة' },
+        { error: 'يرجى إرفاق الملف المطلوب (رفع ملف أو وضع رابط الملف/المشروع)' },
         { status: 400 }
       );
     }
 
-    const challenge = db.challenges.find(c => c.id === challengeId);
-    const challengeTitle = challenge ? challenge.title : 'تحدي عام';
-
-    // Check if existing submission for this team
-    const existingIndex = db.submissions.findIndex(s => s.teamId === teamId);
+    // Check if existing submission for this user or team
+    const existingIndex = db.submissions.findIndex(
+      s => s.submittedByUserId === userId || (s.teamName && s.teamName.trim().toLowerCase() === teamName.trim().toLowerCase())
+    );
 
     if (existingIndex >= 0) {
-      // Update submission
+      // Update existing submission
+      const existing = db.submissions[existingIndex];
       const updated: Submission = {
-        ...db.submissions[existingIndex],
-        challengeId,
-        challengeTitle,
+        ...existing,
+        teamName: teamName.trim(),
+        members: members.trim(),
         projectTitle: projectTitle.trim(),
-        summary: summary.trim(),
-        environmentalImpact: environmentalImpact?.trim() || '',
+        summary: summary?.trim() || '',
+        fileUrl: fileUrl || existing.fileUrl || '',
+        fileName: fileName || existing.fileName || '',
+        fileSize: fileSize !== undefined ? fileSize : existing.fileSize,
+        fileLink: fileLink?.trim() || '',
         demoUrl: demoUrl?.trim() || '',
         repoUrl: repoUrl?.trim() || '',
         presentationUrl: presentationUrl?.trim() || '',
@@ -96,20 +90,22 @@ export async function POST(request: Request) {
         submittedByUserName: user.name,
         updatedAt: new Date().toISOString(),
       };
+
       db.submissions[existingIndex] = updated;
       saveDatabase(db);
       return NextResponse.json(updated);
     } else {
-      // New submission
+      // Create new submission
       const newSubmission: Submission = {
         id: `sub-${Date.now()}`,
-        teamId,
-        teamName,
-        challengeId,
-        challengeTitle,
+        teamName: teamName.trim(),
+        members: members.trim(),
         projectTitle: projectTitle.trim(),
-        summary: summary.trim(),
-        environmentalImpact: environmentalImpact?.trim() || '',
+        summary: summary?.trim() || '',
+        fileUrl: fileUrl || '',
+        fileName: fileName || '',
+        fileSize: fileSize || 0,
+        fileLink: fileLink?.trim() || '',
         demoUrl: demoUrl?.trim() || '',
         repoUrl: repoUrl?.trim() || '',
         presentationUrl: presentationUrl?.trim() || '',
@@ -117,10 +113,38 @@ export async function POST(request: Request) {
         submittedByUserName: user.name,
         submittedAt: new Date().toISOString(),
       };
+
       db.submissions.push(newSubmission);
       saveDatabase(db);
       return NextResponse.json(newSubmission, { status: 201 });
     }
+  } catch (err: any) {
+    return NextResponse.json({ error: err.message }, { status: 500 });
+  }
+}
+
+export async function DELETE(request: Request) {
+  try {
+    const { searchParams } = new URL(request.url);
+    const id = searchParams.get('id');
+
+    if (!id) {
+      return NextResponse.json({ error: 'معرف التسليم مطلوب' }, { status: 400 });
+    }
+
+    const db = getDatabase();
+    const index = db.submissions.findIndex(s => s.id === id);
+
+    if (index === -1) {
+      return NextResponse.json({ error: 'التسليم غير موجود' }, { status: 404 });
+    }
+
+    db.submissions.splice(index, 1);
+    // Also remove related evaluations
+    db.evaluations = db.evaluations.filter(e => e.submissionId !== id);
+    saveDatabase(db);
+
+    return NextResponse.json({ success: true });
   } catch (err: any) {
     return NextResponse.json({ error: err.message }, { status: 500 });
   }

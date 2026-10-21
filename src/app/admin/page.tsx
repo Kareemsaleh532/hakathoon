@@ -2,71 +2,62 @@
 
 import React, { useState, useEffect } from 'react';
 import { useAuth } from '@/context/AuthContext';
-import { Team, Challenge, Criterion, Submission, Evaluation, User, AppSettings } from '@/types';
+import { Criterion, Submission, Evaluation, User, AppSettings } from '@/types';
 
 export default function AdminPage() {
   const { user, login } = useAuth();
   
-  // Auth state
-  const [adminEmail, setAdminEmail] = useState('admin@hackathon.com');
-  const [adminPassword, setAdminPassword] = useState('admin');
+  // Admin Login state
+  const [adminEmail, setAdminEmail] = useState('');
+  const [adminPassword, setAdminPassword] = useState('');
   const [authError, setAuthError] = useState('');
   const [isLoggingIn, setIsLoggingIn] = useState(false);
 
-  // Active Tab
-  const [activeTab, setActiveTab] = useState<'settings' | 'teams' | 'challenges' | 'criteria' | 'judges' | 'submissions' | 'participants'>('settings');
+  // Active Tab: submissions (default!), users, criteria
+  const [activeTab, setActiveTab] = useState<'submissions' | 'users' | 'criteria'>('submissions');
 
   // Data states
   const [settings, setSettings] = useState<AppSettings>({ isSubmissionOpen: false });
-  const [teams, setTeams] = useState<any[]>([]);
-  const [challenges, setChallenges] = useState<Challenge[]>([]);
+  const [usersList, setUsersList] = useState<(User & { password?: string })[]>([]);
   const [criteria, setCriteria] = useState<Criterion[]>([]);
-  const [judges, setJudges] = useState<User[]>([]);
-  const [participants, setParticipants] = useState<any[]>([]);
   const [submissions, setSubmissions] = useState<Submission[]>([]);
   const [evaluations, setEvaluations] = useState<Evaluation[]>([]);
+  const [loading, setLoading] = useState(true);
   const [message, setMessage] = useState<{ text: string; type: 'success' | 'error' } | null>(null);
 
-  // Form states
-  // New Team form
-  const [newTeam, setNewTeam] = useState({ name: '', description: '', maxMembers: 4, track: 'البيئة العامة والاستدامة' });
-  // New Challenge form (No difficulty!)
-  const [newChallenge, setNewChallenge] = useState({
-    title: '',
-    track: 'الطاقة النظيفة وخفض الانبعاثات',
-    description: '',
-    targetImpact: '',
-    deliverables: '',
-  });
-  // New Criterion form
-  const [newCriterion, setNewCriterion] = useState({ name: '', description: '', maxScore: 25, weight: 25 });
-  // New Judge form
-  const [newJudge, setNewJudge] = useState({ name: '', email: '', password: '', specialty: 'محكم بيئي وتقني' });
+  // New Account Form
+  const [newName, setNewName] = useState('');
+  const [newEmail, setNewEmail] = useState('');
+  const [newPassword, setNewPassword] = useState('');
+  const [newRole, setNewRole] = useState<'participant' | 'judge' | 'admin'>('participant');
+  const [isCreatingUser, setIsCreatingUser] = useState(false);
 
-  // Load data
+  // New Criterion Form
+  const [newCritName, setNewCritName] = useState('');
+  const [newCritMaxScore, setNewCritMaxScore] = useState(25);
+  const [newCritDesc, setNewCritDesc] = useState('');
+
+  // Load all data
   const loadAllData = async () => {
+    setLoading(true);
     try {
-      const [settingsRes, teamsRes, challengesRes, criteriaRes, judgesRes, subsRes, evalsRes, partsRes] = await Promise.all([
+      const [settingsRes, usersRes, criteriaRes, subsRes, evalsRes] = await Promise.all([
         fetch('/api/settings'),
-        fetch('/api/teams'),
-        fetch('/api/challenges'),
+        fetch('/api/users'),
         fetch('/api/criteria'),
-        fetch('/api/judges'),
         fetch('/api/submissions'),
-        fetch('/api/evaluations'),
-        fetch('/api/participants')
+        fetch('/api/evaluations')
       ]);
 
       if (settingsRes.ok) setSettings(await settingsRes.json());
-      if (teamsRes.ok) setTeams(await teamsRes.json());
-      if (challengesRes.ok) setChallenges(await challengesRes.json());
+      if (usersRes.ok) setUsersList(await usersRes.json());
       if (criteriaRes.ok) setCriteria(await criteriaRes.json());
-      if (judgesRes.ok) setJudges(await judgesRes.json());
       if (subsRes.ok) setSubmissions(await subsRes.json());
       if (evalsRes.ok) setEvaluations(await evalsRes.json());
-      if (partsRes.ok) setParticipants(await partsRes.json());
     } catch (err) {
       console.error(err);
+    } finally {
+      setLoading(false);
     }
   };
 
@@ -92,7 +83,7 @@ export default function AdminPage() {
       });
       const data = await res.json();
       if (!res.ok) {
-        setAuthError(data.error || 'فشل تسجيل الدخول');
+        setAuthError(data.error || 'بيانات الدخول غير صحيحة');
       } else {
         if (data.user.role !== 'admin') {
           setAuthError('هذا الحساب ليس لديه صلاحيات الادمن');
@@ -120,106 +111,62 @@ export default function AdminPage() {
       if (res.ok) {
         const data = await res.json();
         setSettings(data);
-        showNotification(updatedStatus ? 'تم فتح بوابة التسليم لجميع المشاركين بنجاح' : 'تم إغلاق بوابة التسليم أمام المشاركين');
+        showNotification(
+          updatedStatus ? 'تم فتح بوابة التسليم لجميع الفرق بنجاح' : 'تم إغلاق بوابة التسليم أمام الفرق بنجاح'
+        );
       }
     } catch {
       showNotification('فشل تعديل حالة التسليم', 'error');
     }
   };
 
-  // Reset database ("تصفير البيانات")
-  const handleResetDatabase = async () => {
-    if (!confirm('هل أنت متأكد من رغبتك في تصفير البيانات وإعادتها للحالة النظيفة الافتراضية؟')) {
-      return;
-    }
-    try {
-      const res = await fetch('/api/reset', { method: 'POST' });
-      if (res.ok) {
-        await loadAllData();
-        showNotification('تم تصفير البيانات بنجاح وإعادتها للوضع الافتراضي');
-      } else {
-        showNotification('فشل تصفير البيانات', 'error');
-      }
-    } catch {
-      showNotification('تعذر الاتصال', 'error');
-    }
-  };
-
-  // Create Team
-  const handleCreateTeam = async (e: React.FormEvent) => {
+  // Create User Account locally
+  const handleCreateUser = async (e: React.FormEvent) => {
     e.preventDefault();
+    setIsCreatingUser(true);
     try {
-      const res = await fetch('/api/teams', {
+      const res = await fetch('/api/users', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(newTeam)
+        body: JSON.stringify({
+          name: newName,
+          email: newEmail,
+          password: newPassword,
+          role: newRole,
+        })
       });
+
+      const data = await res.json();
+      if (!res.ok) {
+        showNotification(data.error || 'فشل إنشاء الحساب', 'error');
+      } else {
+        setNewName('');
+        setNewEmail('');
+        setNewPassword('');
+        setUsersList(prev => [...prev, data]);
+        showNotification(`تم إنشاء الحساب وحفظه محلياً بنجاح! يمكن لـ (${data.name}) تسجيل الدخول الآن.`);
+      }
+    } catch {
+      showNotification('تعذر الاتصال بالخادم', 'error');
+    } finally {
+      setIsCreatingUser(false);
+    }
+  };
+
+  // Delete User Account
+  const handleDeleteUser = async (id: string, userName: string) => {
+    if (!confirm(`هل أنت متأكد من حذف حساب "${userName}"؟`)) return;
+    try {
+      const res = await fetch(`/api/users?id=${id}`, { method: 'DELETE' });
       if (res.ok) {
-        setNewTeam({ name: '', description: '', maxMembers: 4, track: 'البيئة العامة والاستدامة' });
-        loadAllData();
-        showNotification('تمت إضافة الفريق بنجاح، وسيظهر للمتسابقين عند التسجيل');
+        setUsersList(prev => prev.filter(u => u.id !== id));
+        showNotification('تم حذف الحساب بنجاح');
       } else {
         const err = await res.json();
-        showNotification(err.error || 'خطأ في إضافة الفريق', 'error');
+        showNotification(err.error || 'فشل الحذف', 'error');
       }
     } catch {
-      showNotification('تعذر الاتصال', 'error');
-    }
-  };
-
-  // Delete Team
-  const handleDeleteTeam = async (id: string) => {
-    if (!confirm('هل أنت متأكد من حذف هذا الفريق؟')) return;
-    try {
-      const res = await fetch(`/api/teams?id=${id}`, { method: 'DELETE' });
-      if (res.ok) {
-        loadAllData();
-        showNotification('تم حذف الفريق بنجاح');
-      }
-    } catch {
-      showNotification('خطأ في الحذف', 'error');
-    }
-  };
-
-  // Create Challenge (No difficulty)
-  const handleCreateChallenge = async (e: React.FormEvent) => {
-    e.preventDefault();
-    try {
-      const res = await fetch('/api/challenges', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(newChallenge)
-      });
-      if (res.ok) {
-        setNewChallenge({
-          title: '',
-          track: 'الطاقة النظيفة وخفض الانبعاثات',
-          description: '',
-          targetImpact: '',
-          deliverables: '',
-        });
-        loadAllData();
-        showNotification('تمت إضافة التحدي البيئي بنجاح');
-      } else {
-        const err = await res.json();
-        showNotification(err.error || 'خطأ في إضافة التحدي', 'error');
-      }
-    } catch {
-      showNotification('تعذر الاتصال', 'error');
-    }
-  };
-
-  // Delete Challenge
-  const handleDeleteChallenge = async (id: string) => {
-    if (!confirm('هل أنت متأكد من حذف هذا التحدي؟')) return;
-    try {
-      const res = await fetch(`/api/challenges?id=${id}`, { method: 'DELETE' });
-      if (res.ok) {
-        loadAllData();
-        showNotification('تم حذف التحدي');
-      }
-    } catch {
-      showNotification('خطأ في الحذف', 'error');
+      showNotification('خطأ في الاتصال', 'error');
     }
   };
 
@@ -230,15 +177,20 @@ export default function AdminPage() {
       const res = await fetch('/api/criteria', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(newCriterion)
+        body: JSON.stringify({
+          name: newCritName,
+          maxScore: Number(newCritMaxScore),
+          description: newCritDesc,
+        })
       });
       if (res.ok) {
-        setNewCriterion({ name: '', description: '', maxScore: 25, weight: 25 });
+        setNewCritName('');
+        setNewCritDesc('');
         loadAllData();
         showNotification('تمت إضافة معيار التحكيم بنجاح');
       } else {
         const err = await res.json();
-        showNotification(err.error || 'خطأ في إضافة المعيار', 'error');
+        showNotification(err.error || 'خطأ في الإضافة', 'error');
       }
     } catch {
       showNotification('تعذر الاتصال', 'error');
@@ -251,84 +203,70 @@ export default function AdminPage() {
     try {
       const res = await fetch(`/api/criteria?id=${id}`, { method: 'DELETE' });
       if (res.ok) {
-        loadAllData();
-        showNotification('تم حذف المعيار');
+        setCriteria(prev => prev.filter(c => c.id !== id));
+        showNotification('تم حذف المعيار بنجاح');
+      } else {
+        const err = await res.json();
+        showNotification(err.error || 'خطأ في الحذف', 'error');
       }
     } catch {
       showNotification('خطأ في الحذف', 'error');
     }
   };
 
-  // Create Judge
-  const handleCreateJudge = async (e: React.FormEvent) => {
-    e.preventDefault();
+  // Delete Submission
+  const handleDeleteSubmission = async (id: string, teamName: string) => {
+    if (!confirm(`هل أنت متأكد من حذف تسليم فريق "${teamName}"؟`)) return;
     try {
-      const res = await fetch('/api/judges', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(newJudge)
-      });
+      const res = await fetch(`/api/submissions?id=${id}`, { method: 'DELETE' });
       if (res.ok) {
-        setNewJudge({ name: '', email: '', password: '', specialty: 'محكم بيئي وتقني' });
-        loadAllData();
-        showNotification('تم إنشاء حساب الحكم بنجاح');
+        setSubmissions(prev => prev.filter(s => s.id !== id));
+        setEvaluations(prev => prev.filter(e => e.submissionId !== id));
+        showNotification('تم حذف التسليم وتقييماته بنجاح');
       } else {
         const err = await res.json();
-        showNotification(err.error || 'خطأ في إنشاء حساب الحكم', 'error');
+        showNotification(err.error || 'فشل الحذف', 'error');
+      }
+    } catch {
+      showNotification('خطأ في الحذف', 'error');
+    }
+  };
+
+  // Reset database
+  const handleResetDatabase = async () => {
+    if (!confirm('تحذير: هل أنت متأكد من تصفير كافة البيانات والبدء بحالة فارغة نظيفة تماماً؟')) {
+      return;
+    }
+    try {
+      const res = await fetch('/api/reset', { method: 'POST' });
+      if (res.ok) {
+        await loadAllData();
+        showNotification('تم تصفير البيانات بنجاح والعودة للحالة النظيفة.');
+      } else {
+        showNotification('فشل تصفير البيانات', 'error');
       }
     } catch {
       showNotification('تعذر الاتصال', 'error');
     }
   };
 
-  // Delete Judge
-  const handleDeleteJudge = async (id: string) => {
-    if (!confirm('هل أنت متأكد من حذف هذا الحكم؟ سيتم حذف تقييماته أيضاً.')) return;
-    try {
-      const res = await fetch(`/api/judges?id=${id}`, { method: 'DELETE' });
-      if (res.ok) {
-        loadAllData();
-        showNotification('تم حذف حساب الحكم بنجاح');
-      } else {
-        const err = await res.json();
-        showNotification(err.error || 'خطأ في حذف الحكم', 'error');
-      }
-    } catch {
-      showNotification('خطأ في الحذف', 'error');
-    }
-  };
-
-  // Delete Participant
-  const handleDeleteParticipant = async (id: string) => {
-    if (!confirm('هل أنت متأكد من حذف حساب هذا المتسابق؟')) return;
-    try {
-      const res = await fetch(`/api/participants?id=${id}`, { method: 'DELETE' });
-      if (res.ok) {
-        loadAllData();
-        showNotification('تم حذف حساب المتسابق بنجاح');
-      } else {
-        const err = await res.json();
-        showNotification(err.error || 'خطأ في حذف المتسابق', 'error');
-      }
-    } catch {
-      showNotification('خطأ في الحذف', 'error');
-    }
-  };
-
-  // If not logged in as Admin, show login form
+  // If not logged in as Admin, show Admin Login form (Zero Icons)
   if (!user || user.role !== 'admin') {
     return (
-      <div className="container" style={{ maxWidth: '480px', paddingTop: '60px' }}>
-        <div className="card">
-          <div style={{ textAlign: 'center', marginBottom: '20px' }}>
-            <h1 className="card-title" style={{ fontSize: '1.5rem' }}>تسجيل دخول الادمن</h1>
+      <div className="container" style={{ maxWidth: '460px', paddingTop: '60px' }}>
+        <div className="card" style={{ padding: '32px 28px' }}>
+          <div style={{ textAlign: 'center', marginBottom: '22px' }}>
+            <h1 className="card-title" style={{ fontSize: '1.4rem' }}>دخول الإدارة (الادمن)</h1>
+            <div style={{ fontSize: '0.82rem', fontWeight: 700, color: 'var(--text-dim)', marginBottom: '4px' }}>
+              GREENOVATE HACKATHON
+            </div>
             <p className="card-subtitle">
-              يرجى إدخال بيانات حساب مدير الهاكاثون للوصول إلى لوحة الإدارة
+              يرجى إدخال بيانات حساب مدير الهاكاثون للوصول إلى لوحة التحكم
             </p>
           </div>
 
           {authError && (
-            <div className="alert alert-danger">
+            <div className="alert alert-danger" style={{ marginBottom: '16px' }}>
               <span>{authError}</span>
             </div>
           )}
@@ -339,11 +277,11 @@ export default function AdminPage() {
               <input 
                 type="email" 
                 className="form-control" 
+                placeholder="admin@hackathon.com"
                 value={adminEmail} 
                 onChange={e => setAdminEmail(e.target.value)} 
                 required 
               />
-              <span className="form-hint">البريد الافتراضي: admin@hackathon.com</span>
             </div>
 
             <div className="form-group">
@@ -351,17 +289,17 @@ export default function AdminPage() {
               <input 
                 type="password" 
                 className="form-control" 
+                placeholder="••••••••"
                 value={adminPassword} 
                 onChange={e => setAdminPassword(e.target.value)} 
                 required 
               />
-              <span className="form-hint">كلمة المرور الافتراضية: admin</span>
             </div>
 
             <button 
               type="submit" 
               className="btn btn-primary" 
-              style={{ width: '100%', marginTop: '10px' }}
+              style={{ width: '100%', marginTop: '12px', height: '46px', fontWeight: 700 }}
               disabled={isLoggingIn}
             >
               {isLoggingIn ? 'جار التحقق...' : 'دخول لوحة الادمن'}
@@ -372,75 +310,105 @@ export default function AdminPage() {
     );
   }
 
-  // Admin Dashboard
+  // Calculate project rankings
+  const rankedSubmissions = submissions.map(sub => {
+    const subEvals = evaluations.filter(e => e.submissionId === sub.id);
+    const avgScore = subEvals.length > 0
+      ? Number((subEvals.reduce((sum, e) => sum + e.totalScore, 0) / subEvals.length).toFixed(1))
+      : 0;
+    return {
+      ...sub,
+      evals: subEvals,
+      evalsCount: subEvals.length,
+      avgScore
+    };
+  }).sort((a, b) => b.avgScore - a.avgScore);
+
+  const maxTotalScore = criteria.reduce((sum, c) => sum + c.maxScore, 0);
+
   return (
-    <div className="container" style={{ paddingTop: '30px' }}>
-      {/* Header */}
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', flexWrap: 'wrap', gap: '16px', marginBottom: '24px' }}>
-        <div style={{ flex: '1 1 280px', minWidth: 0 }}>
-          <h1 style={{ fontSize: 'clamp(1.2rem, 3vw, 1.8rem)', fontWeight: 800, color: '#ffffff' }}>
-            صفحة الادمن - إدارة الهاكاثون
+    <div className="container" style={{ paddingTop: '30px', paddingBottom: '60px' }}>
+      {/* Top Banner with Submission Toggle - Solid Green and Beige, Zero Icons */}
+      <div style={{
+        background: '#FFFFFF',
+        border: '1.5px solid var(--border-color)',
+        borderRadius: '8px',
+        padding: '20px 24px',
+        marginBottom: '24px',
+        display: 'flex',
+        justifyContent: 'space-between',
+        alignItems: 'center',
+        flexWrap: 'wrap',
+        gap: '16px'
+      }}>
+        <div>
+          <span className="badge badge-emerald" style={{ marginBottom: '6px' }}>لوحة تحكم الادمن</span>
+          <h1 style={{ fontSize: 'clamp(1.2rem, 3vw, 1.8rem)', fontWeight: 900, color: 'var(--primary)', marginBottom: '4px' }}>
+            GREENOVATE HACKATHON
           </h1>
-          <p style={{ color: 'var(--text-dim)', fontSize: '0.9rem' }}>
-            إدارة الفرق، التحديات، معايير التحكيم، وبوابة التسليم
+          <p style={{ color: 'var(--text-dim)', fontSize: '0.88rem' }}>
+            التحكم في فتح وإغلاق التسليم، إنشاء حسابات الفرق والمحكمين، ومتابعة التقييمات
           </p>
         </div>
 
-        {/* Quick Portal Switch Card */}
+        {/* PROMINENT SUBMISSION TOGGLE: "خانة فتح التسليم بتنفتح فقط منن عند الادمن" */}
         <div style={{
-          background: 'var(--bg-card)',
-          border: '1px solid var(--border-color)',
-          padding: '10px 16px',
-          borderRadius: '8px',
+          background: 'var(--bg-body)',
+          border: '1.5px solid var(--border-color)',
+          borderRadius: '6px',
+          padding: '12px 20px',
           display: 'flex',
           alignItems: 'center',
-          gap: '14px',
-          flexWrap: 'wrap',
-          flex: '0 1 auto'
+          gap: '16px',
+          flexWrap: 'wrap'
         }}>
           <div>
-            <div style={{ fontSize: '0.78rem', color: 'var(--text-dim)' }}>بوابة تسليم المشاريع:</div>
-            <div style={{ fontWeight: 700, color: settings.isSubmissionOpen ? '#22c55e' : '#f87171' }}>
-              {settings.isSubmissionOpen ? 'مفتوحة الآن' : 'مغلقة'}
+            <div style={{ fontSize: '0.78rem', color: 'var(--text-dim)' }}>خانة تسليم المشاريع للفرق:</div>
+            <div style={{
+              fontWeight: 800,
+              fontSize: '1rem',
+              color: settings.isSubmissionOpen ? 'var(--primary)' : 'var(--danger)',
+              display: 'flex',
+              alignItems: 'center',
+              gap: '6px'
+            }}>
+              <span className={`status-dot ${settings.isSubmissionOpen ? 'green' : 'red'}`}></span>
+              {settings.isSubmissionOpen ? 'مفتوحة الآن للفرق' : 'مغلقة أمام الفرق'}
             </div>
           </div>
+
           <button 
-            onClick={handleToggleSubmission} 
-            className={`btn btn-sm ${settings.isSubmissionOpen ? 'btn-danger' : 'btn-primary'}`}
+            type="button"
+            onClick={handleToggleSubmission}
+            className={`btn ${settings.isSubmissionOpen ? 'btn-danger' : 'btn-primary'}`}
+            style={{ fontWeight: 700, padding: '9px 18px' }}
           >
-            {settings.isSubmissionOpen ? 'إغلاق البوابة' : 'فتح البوابة للمتسابقين'}
+            {settings.isSubmissionOpen ? 'إغلاق باب التسليم' : 'فتح باب التسليم للفرق'}
           </button>
         </div>
       </div>
 
       {message && (
-        <div className={`alert ${message.type === 'success' ? 'alert-info' : 'alert-danger'}`}>
+        <div className={`alert ${message.type === 'success' ? 'alert-info' : 'alert-danger'}`} style={{ marginBottom: '20px' }}>
           <span>{message.text}</span>
         </div>
       )}
 
-      {/* Tabs */}
-      <div className="tabs-header">
+      {/* Navigation Tabs */}
+      <div className="tabs-header" style={{ marginBottom: '20px' }}>
         <button 
           type="button"
-          className={`tab-btn ${activeTab === 'settings' ? 'active' : ''}`}
-          onClick={() => setActiveTab('settings')}
+          className={`tab-btn ${activeTab === 'submissions' ? 'active' : ''}`}
+          onClick={() => setActiveTab('submissions')}
         >
-          التحكم والإحصاءات
+          المشاريع المسلمة وتقييمات الحكام ({submissions.length})
         </button>
         <button 
           type="button"
-          className={`tab-btn ${activeTab === 'teams' ? 'active' : ''}`}
-          onClick={() => setActiveTab('teams')}
+          className={`tab-btn ${activeTab === 'users' ? 'active' : ''}`}
+          onClick={() => setActiveTab('users')}
         >
-          إدارة الفرق ({teams.length})
-        </button>
-        <button 
-          type="button"
-          className={`tab-btn ${activeTab === 'challenges' ? 'active' : ''}`}
-          onClick={() => setActiveTab('challenges')}
-        >
-          إدارة التحديات ({challenges.length})
+          إنشاء وإدارة الحسابات ({usersList.length})
         </button>
         <button 
           type="button"
@@ -449,220 +417,359 @@ export default function AdminPage() {
         >
           معايير التحكيم ({criteria.length})
         </button>
-        <button 
-          type="button"
-          className={`tab-btn ${activeTab === 'judges' ? 'active' : ''}`}
-          onClick={() => setActiveTab('judges')}
-        >
-          حسابات الحكام ({judges.length})
-        </button>
-        <button 
-          type="button"
-          className={`tab-btn ${activeTab === 'participants' ? 'active' : ''}`}
-          onClick={() => setActiveTab('participants')}
-        >
-          حسابات المتسابقين ({participants.length})
-        </button>
-        <button 
-          type="button"
-          className={`tab-btn ${activeTab === 'submissions' ? 'active' : ''}`}
-          onClick={() => setActiveTab('submissions')}
-        >
-          المشاريع المسلمة والتقييمات ({submissions.length})
-        </button>
       </div>
 
-      {/* TAB 1: General Settings & Status */}
-      {activeTab === 'settings' && (
-        <div className="grid-2">
-          <div className="card">
-            <h2 className="card-title">التحكم في بوابة التسليم للمشاركين</h2>
-            <p className="card-subtitle">
-              صفحة التسليم لا تفتح للمتسابقين إلا بقرار من الادمن.
-            </p>
-            <div style={{
-              padding: '14px',
-              borderRadius: '8px',
-              background: 'var(--bg-input)',
-              border: '1px solid var(--border-color)',
-              marginBottom: '18px'
-            }}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '8px' }}>
-                <span className={`status-dot ${settings.isSubmissionOpen ? 'green' : 'red'}`}></span>
-                <span style={{ fontWeight: 700 }}>
-                  الحالة: {settings.isSubmissionOpen ? 'مفتوحة (يمكن للمشاركين التسليم)' : 'مغلقة (محجوبة عن المتسابقين)'}
-                </span>
-              </div>
-              <p style={{ fontSize: '0.85rem', color: 'var(--text-dim)' }}>
-                عند فتح البوابة، يمكن للمتسابق تسليم حل فريقه وروابط الـ Demo والكود وشرح الأثر البيئي.
-              </p>
+      {/* TAB 1: Submissions & Judge Evaluations */}
+      {activeTab === 'submissions' && (
+        <div>
+          {/* Summary Stats */}
+          <div className="grid-3" style={{ marginBottom: '20px' }}>
+            <div className="card" style={{ padding: '16px' }}>
+              <div style={{ fontSize: '0.82rem', color: 'var(--text-dim)' }}>إجمالي المشاريع المسلمة:</div>
+              <div style={{ fontSize: '1.6rem', fontWeight: 800, color: 'var(--primary)' }}>{submissions.length}</div>
             </div>
-            <button 
-              onClick={handleToggleSubmission}
-              className={`btn ${settings.isSubmissionOpen ? 'btn-danger' : 'btn-primary'}`}
-              style={{ width: '100%', marginBottom: '14px' }}
-            >
-              {settings.isSubmissionOpen ? 'إغلاق بوابة التسليم الآن' : 'فتح بوابة التسليم الآن'}
-            </button>
-
-            {/* Reset Database Button ("تصفير البيانات") */}
-            <div style={{ paddingTop: '16px', borderTop: '1px solid var(--border-color)' }}>
-              <button 
-                onClick={handleResetDatabase}
-                className="btn btn-outline btn-sm"
-                style={{ width: '100%', color: '#f87171' }}
-              >
-                تصفير البيانات وإعادة التعيين الافتراضي
-              </button>
+            <div className="card" style={{ padding: '16px' }}>
+              <div style={{ fontSize: '0.82rem', color: 'var(--text-dim)' }}>إجمالي تقييمات الحكام:</div>
+              <div style={{ fontSize: '1.6rem', fontWeight: 800, color: '#1E3A5F' }}>{evaluations.length}</div>
+            </div>
+            <div className="card" style={{ padding: '16px' }}>
+              <div style={{ fontSize: '0.82rem', color: 'var(--text-dim)' }}>المشاريع المقيّمة:</div>
+              <div style={{ fontSize: '1.6rem', fontWeight: 800, color: '#854D0E' }}>
+                {rankedSubmissions.filter(s => s.evalsCount > 0).length} / {submissions.length}
+              </div>
             </div>
           </div>
 
+          {/* Submissions & Detailed Evaluations List */}
           <div className="card">
-            <h2 className="card-title">إحصائيات النظام</h2>
-            <p className="card-subtitle">ملخص الأنشطة الحالية في الهاكاثون</p>
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
-              <div style={{ display: 'flex', justifyContent: 'space-between', padding: '10px 12px', background: 'var(--bg-input)', borderRadius: '6px' }}>
-                <span>إجمالي الفرق:</span>
-                <strong style={{ color: '#22c55e' }}>{teams.length}</strong>
-              </div>
-              <div style={{ display: 'flex', justifyContent: 'space-between', padding: '10px 12px', background: 'var(--bg-input)', borderRadius: '6px' }}>
-                <span>التحديات البيئية النشطة:</span>
-                <strong style={{ color: '#22c55e' }}>{challenges.length}</strong>
-              </div>
-              <div style={{ display: 'flex', justifyContent: 'space-between', padding: '10px 12px', background: 'var(--bg-input)', borderRadius: '6px' }}>
-                <span>معايير التحكيم:</span>
-                <strong style={{ color: '#22c55e' }}>{criteria.length}</strong>
-              </div>
-              <div style={{ display: 'flex', justifyContent: 'space-between', padding: '10px 12px', background: 'var(--bg-input)', borderRadius: '6px' }}>
-                <span>المشاريع المسلمة:</span>
-                <strong style={{ color: '#22c55e' }}>{submissions.length}</strong>
-              </div>
-              <div style={{ display: 'flex', justifyContent: 'space-between', padding: '10px 12px', background: 'var(--bg-input)', borderRadius: '6px' }}>
-                <span>الحكام المعتمدون:</span>
-                <strong style={{ color: '#22c55e' }}>{judges.length}</strong>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px', flexWrap: 'wrap', gap: '10px' }}>
+              <div>
+                <h2 className="card-title" style={{ margin: 0 }}>
+                  كل المشاريع المسلّمة وتقييماتها من الحكام
+                </h2>
+                <p className="card-subtitle" style={{ margin: 0, marginTop: '4px' }}>
+                  يظهر هنا اسم كل فريق وأعضاؤه والملف المسلَّم وتفصيل درجات الحكام
+                </p>
               </div>
             </div>
+
+            {loading ? (
+              <div style={{ textAlign: 'center', padding: '40px 0', color: 'var(--text-dim)' }}>
+                جار التحميل...
+              </div>
+            ) : rankedSubmissions.length === 0 ? (
+              <div style={{ textAlign: 'center', padding: '50px 20px', color: 'var(--text-dim)' }}>
+                <h3 style={{ fontSize: '1.1rem', fontWeight: 800, marginBottom: '6px', color: 'var(--primary)' }}>
+                  لا توجد مشاريع مسلّمة حتى الآن
+                </h3>
+                <p style={{ fontSize: '0.85rem' }}>
+                  عندما يسلّم أي فريق مشروعه من صفحته، سيظهر هنا فوراً مع تقييمات الحكام.
+                </p>
+              </div>
+            ) : (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
+                {rankedSubmissions.map((sub, index) => (
+                  <div 
+                    key={sub.id} 
+                    style={{
+                      background: 'var(--bg-body)',
+                      border: '1.5px solid var(--border-color)',
+                      borderRadius: '6px',
+                      padding: '20px',
+                    }}
+                  >
+                    {/* Top Row: Rank, Project Title, Team, Members */}
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', flexWrap: 'wrap', gap: '12px', marginBottom: '12px' }}>
+                      <div>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '4px' }}>
+                          <span className="num-pill">{index + 1}</span>
+                          <h3 style={{ fontSize: '1.2rem', fontWeight: 800, color: 'var(--primary)' }}>
+                            {sub.projectTitle}
+                          </h3>
+                        </div>
+
+                        <div style={{ display: 'flex', gap: '14px', flexWrap: 'wrap', fontSize: '0.88rem' }}>
+                          <div>
+                            <span style={{ color: 'var(--text-dim)' }}>اسم التيم: </span>
+                            <strong style={{ color: 'var(--primary)' }}>{sub.teamName}</strong>
+                          </div>
+                          <div>
+                            <span style={{ color: 'var(--text-dim)' }}>الأعضاء: </span>
+                            <strong style={{ color: 'var(--text-main)' }}>{sub.members}</strong>
+                          </div>
+                        </div>
+                      </div>
+
+                      {/* Average Score Badge */}
+                      <div style={{ textAlign: 'left' }}>
+                        <div style={{ fontSize: '0.75rem', color: 'var(--text-dim)' }}>معدل الحكام:</div>
+                        <div style={{ fontSize: '1.3rem', fontWeight: 900, color: sub.evalsCount > 0 ? 'var(--primary)' : 'var(--text-dim)' }}>
+                          {sub.evalsCount > 0 ? `${sub.avgScore} / ${maxTotalScore}` : 'لم يقيّم بعد'}
+                        </div>
+                        <div style={{ fontSize: '0.75rem', color: 'var(--text-dim)' }}>
+                          ({sub.evalsCount} تقييم)
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Files & Links - Zero Icons */}
+                    <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap', marginBottom: '14px', alignItems: 'center' }}>
+                      <span style={{ fontSize: '0.82rem', color: 'var(--text-dim)' }}>الملفات والروابط:</span>
+                      
+                      {sub.fileUrl && (
+                        <a 
+                          href={sub.fileUrl} 
+                          download 
+                          target="_blank" 
+                          rel="noreferrer"
+                          className="btn btn-outline btn-sm"
+                        >
+                          تحميل الملف ({sub.fileName || 'ملف المشروع'})
+                        </a>
+                      )}
+
+                      {sub.fileLink && (
+                        <a 
+                          href={sub.fileLink} 
+                          target="_blank" 
+                          rel="noreferrer" 
+                          className="btn btn-secondary btn-sm"
+                        >
+                          رابط خارجي للملف
+                        </a>
+                      )}
+
+                      {sub.demoUrl && (
+                        <a 
+                          href={sub.demoUrl} 
+                          target="_blank" 
+                          rel="noreferrer" 
+                          className="btn btn-outline btn-sm"
+                        >
+                          رابط التجربة (Demo)
+                        </a>
+                      )}
+
+                      <button 
+                        type="button" 
+                        onClick={() => handleDeleteSubmission(sub.id, sub.teamName)}
+                        className="btn btn-danger btn-sm"
+                        style={{ marginRight: 'auto' }}
+                      >
+                        حذف التسليم
+                      </button>
+                    </div>
+
+                    {/* Summary */}
+                    {sub.summary && (
+                      <p style={{ fontSize: '0.85rem', color: 'var(--text-dim)', marginBottom: '14px', lineHeight: 1.6 }}>
+                        <strong style={{ color: 'var(--text-main)' }}>نبذة: </strong> {sub.summary}
+                      </p>
+                    )}
+
+                    {/* Judges Evaluations Breakdown */}
+                    <div style={{
+                      background: '#FFFFFF',
+                      borderRadius: '6px',
+                      padding: '14px',
+                      border: '1.5px solid var(--border-color)',
+                      marginTop: '10px'
+                    }}>
+                      <div style={{ fontWeight: 800, fontSize: '0.88rem', color: 'var(--primary)', marginBottom: '8px' }}>
+                        تقييمات الحكام لهذا المشروع ({sub.evals.length}):
+                      </div>
+
+                      {sub.evals.length === 0 ? (
+                        <div style={{ fontSize: '0.82rem', color: 'var(--text-muted)' }}>
+                          لم يقم أي محكّم بتقييم هذا المشروع حتى الآن.
+                        </div>
+                      ) : (
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                          {sub.evals.map(ev => (
+                            <div 
+                              key={ev.id} 
+                              style={{
+                                display: 'flex',
+                                justifyContent: 'space-between',
+                                alignItems: 'center',
+                                padding: '8px 12px',
+                                background: 'var(--bg-body)',
+                                borderRadius: '4px',
+                                fontSize: '0.85rem',
+                                flexWrap: 'wrap',
+                                gap: '8px',
+                                border: '1px solid var(--border-color)'
+                              }}
+                            >
+                              <div>
+                                <strong style={{ color: 'var(--primary)' }}>{ev.judgeName}: </strong>
+                                <span style={{ color: 'var(--text-dim)', fontSize: '0.8rem' }}>
+                                  {Object.entries(ev.scores).map(([critId, score]) => {
+                                    const c = criteria.find(item => item.id === critId);
+                                    return `${c ? c.name : critId}: ${score}ن`;
+                                  }).join(' | ')}
+                                </span>
+                                {ev.feedback && (
+                                  <div style={{ fontSize: '0.78rem', color: 'var(--text-dim)', marginTop: '2px' }}>
+                                    ملاحظة الحكم: "{ev.feedback}"
+                                  </div>
+                                )}
+                              </div>
+
+                              <div style={{ fontWeight: 800, color: 'var(--primary)', fontSize: '0.95rem' }}>
+                                المجموع: {ev.totalScore} نقطة
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
           </div>
         </div>
       )}
 
-      {/* TAB 2: Manage Teams */}
-      {activeTab === 'teams' && (
+      {/* TAB 2: Accounts Management (Create Emails locally) */}
+      {activeTab === 'users' && (
         <div>
           <div className="card" style={{ marginBottom: '24px' }}>
-            <h2 className="card-title">إدخال فريق جديد</h2>
+            <h2 className="card-title">إنشاء حساب رسمي جديد (يُحفظ محلياً)</h2>
             <p className="card-subtitle">
-              المتسابق عند تسجيله سيختار فريقه من بين الفرق التي تقوم بإضافتها هنا.
+              حسابات الفرق ولجنة التحكيم تصدر حصرياً من هنا وتخزن محلياً في قاعدة البيانات
             </p>
-            <form onSubmit={handleCreateTeam}>
+
+            <form onSubmit={handleCreateUser}>
               <div className="grid-2">
                 <div className="form-group">
-                  <label className="form-label">اسم الفريق</label>
+                  <label className="form-label">الاسم الكامل / اسم الفريق أو الحكم *</label>
                   <input 
                     type="text" 
                     className="form-control" 
-                    placeholder="مثال: فريق الاستدامة الخضراء"
-                    value={newTeam.name} 
-                    onChange={e => setNewTeam({ ...newTeam, name: e.target.value })} 
+                    placeholder="مثال: فريق الرواد / د. سامي الأحمد"
+                    value={newName} 
+                    onChange={e => setNewName(e.target.value)} 
                     required 
                   />
                 </div>
+
                 <div className="form-group">
-                  <label className="form-label">المسار البيئي</label>
-                  <input 
-                    type="text" 
-                    className="form-control" 
-                    placeholder="مثال: خفض الانبعاثات، المياه، الطاقة النظيفة"
-                    value={newTeam.track} 
-                    onChange={e => setNewTeam({ ...newTeam, track: e.target.value })} 
-                  />
+                  <label className="form-label">نوع الحساب (الدور) *</label>
+                  <select 
+                    className="form-select"
+                    value={newRole}
+                    onChange={e => setNewRole(e.target.value as any)}
+                  >
+                    <option value="participant">فريق مشارك (يقوم بالتسليم فقط)</option>
+                    <option value="judge">محكّم (يقوم بتقييم المشاريع فقط)</option>
+                    <option value="admin">مسؤول إدارة (ادمن)</option>
+                  </select>
                 </div>
               </div>
 
               <div className="grid-2">
                 <div className="form-group">
-                  <label className="form-label">الحد الأقصى للأعضاء</label>
+                  <label className="form-label">البريد الإلكتروني المعتمد *</label>
                   <input 
-                    type="number" 
-                    min="1" 
-                    max="10" 
+                    type="email" 
                     className="form-control" 
-                    value={newTeam.maxMembers} 
-                    onChange={e => setNewTeam({ ...newTeam, maxMembers: Number(e.target.value) })} 
+                    placeholder="team1@hackathon.com"
+                    value={newEmail} 
+                    onChange={e => setNewEmail(e.target.value)} 
                     required 
                   />
                 </div>
+
                 <div className="form-group">
-                  <label className="form-label">وصف الفريق</label>
+                  <label className="form-label">كلمة المرور *</label>
                   <input 
                     type="text" 
                     className="form-control" 
-                    placeholder="وصف مجال عمل الفريق"
-                    value={newTeam.description} 
-                    onChange={e => setNewTeam({ ...newTeam, description: e.target.value })} 
+                    placeholder="كلمة المرور المسلمة له"
+                    value={newPassword} 
+                    onChange={e => setNewPassword(e.target.value)} 
+                    required 
                   />
                 </div>
               </div>
 
-              <button type="submit" className="btn btn-primary">
-                إضافة الفريق
+              <button 
+                type="submit" 
+                className="btn btn-primary"
+                disabled={isCreatingUser}
+                style={{ minWidth: '180px', height: '44px', fontWeight: 700 }}
+              >
+                {isCreatingUser ? 'جار الحفظ...' : 'إنشاء وحفظ الحساب محلياً'}
               </button>
             </form>
           </div>
 
+          {/* Users Table */}
           <div className="card">
-            <h2 className="card-title">الفرق المعتمدة ({teams.length})</h2>
+            <h2 className="card-title">قائمة الحسابات المعتمدة ({usersList.length})</h2>
+            <p className="card-subtitle">
+              جميع الحسابات المخزنة محلياً والتي يمكن لأصحابها الدخول للنظام
+            </p>
+
             <div className="table-responsive">
               <table className="data-table">
                 <thead>
                   <tr>
-                    <th>اسم الفريق</th>
-                    <th>المسار</th>
-                    <th>الوصف</th>
-                    <th>الأعضاء المسجلون</th>
-                    <th>الحالة</th>
+                    <th>الاسم / الفريق</th>
+                    <th>البريد الإلكتروني</th>
+                    <th>كلمة المرور</th>
+                    <th>الدور</th>
+                    <th>تاريخ الإنشاء</th>
                     <th>إجراءات</th>
                   </tr>
                 </thead>
                 <tbody>
-                  {teams.map(team => (
-                    <tr key={team.id}>
-                      <td style={{ fontWeight: 700, color: '#f8fafc' }}>{team.name}</td>
-                      <td><span className="badge badge-emerald">{team.track || 'عام'}</span></td>
-                      <td style={{ fontSize: '0.86rem', color: 'var(--text-dim)', maxWidth: '280px' }}>
-                        {team.description || '-'}
-                      </td>
+                  {usersList.map(u => (
+                    <tr key={u.id}>
+                      <td style={{ fontWeight: 700, color: 'var(--primary)' }}>{u.name}</td>
+                      <td style={{ color: 'var(--text-main)' }}>{u.email}</td>
                       <td>
-                        <span style={{ fontWeight: 600 }}>
-                          {team.membersCount || 0} / {team.maxMembers}
+                        <span style={{
+                          fontFamily: 'monospace',
+                          background: 'var(--bg-body)',
+                          border: '1px solid var(--border-color)',
+                          padding: '3px 8px',
+                          borderRadius: '4px',
+                          color: 'var(--primary)',
+                          fontWeight: 700
+                        }}>
+                          {u.password || '••••••'}
                         </span>
-                        {team.members && team.members.length > 0 && (
-                          <div style={{ fontSize: '0.75rem', color: '#94a3b8', marginTop: '2px' }}>
-                            {team.members.map((m: any) => m.name).join('، ')}
-                          </div>
-                        )}
                       </td>
                       <td>
-                        {(team.membersCount || 0) >= team.maxMembers ? (
-                          <span className="badge badge-amber">مكتمل</span>
+                        <span className={`badge ${u.role === 'admin' ? 'badge-emerald' : u.role === 'judge' ? 'badge-blue' : 'badge-amber'}`}>
+                          {u.role === 'admin' ? 'إدارة' : u.role === 'judge' ? 'حكم' : 'فريق'}
+                        </span>
+                      </td>
+                      <td style={{ fontSize: '0.8rem', color: 'var(--text-dim)' }}>
+                        {new Date(u.createdAt).toLocaleDateString('ar-EG')}
+                      </td>
+                      <td>
+                        {u.id !== 'admin-1' ? (
+                          <button 
+                            type="button" 
+                            onClick={() => handleDeleteUser(u.id, u.name)}
+                            className="btn btn-danger btn-sm"
+                          >
+                            حذف
+                          </button>
                         ) : (
-                          <span className="badge badge-emerald">متاح</span>
+                          <span style={{ fontSize: '0.75rem', color: 'var(--text-dim)' }}>رئيسي</span>
                         )}
-                      </td>
-                      <td>
-                        <button 
-                          onClick={() => handleDeleteTeam(team.id)}
-                          className="btn btn-danger btn-sm"
-                        >
-                          حذف
-                        </button>
                       </td>
                     </tr>
                   ))}
-                  {teams.length === 0 && (
+                  {usersList.length === 0 && (
                     <tr>
-                      <td colSpan={6} style={{ textAlign: 'center', padding: '24px' }}>
-                        لا توجد فرق مدخلة بعد.
+                      <td colSpan={6} style={{ textAlign: 'center', padding: '24px', color: 'var(--text-dim)' }}>
+                        لا توجد حسابات مسجلة.
                       </td>
                     </tr>
                   )}
@@ -673,183 +780,60 @@ export default function AdminPage() {
         </div>
       )}
 
-      {/* TAB 3: Manage Challenges (No difficulty field!) */}
-      {activeTab === 'challenges' && (
-        <div>
-          <div className="card" style={{ marginBottom: '24px' }}>
-            <h2 className="card-title">إدخال تحدٍ بيئي جديد</h2>
-            <p className="card-subtitle">
-              جميع التحديات تكون بمستوى موحد ومتاحة لجميع الفرق
-            </p>
-            <form onSubmit={handleCreateChallenge}>
-              <div className="grid-2">
-                <div className="form-group">
-                  <label className="form-label">عنوان التحدي البيئي</label>
-                  <input 
-                    type="text" 
-                    className="form-control" 
-                    placeholder="مثال: رصد انبعاثات الكربون في المنشآت"
-                    value={newChallenge.title} 
-                    onChange={e => setNewChallenge({ ...newChallenge, title: e.target.value })} 
-                    required 
-                  />
-                </div>
-                <div className="form-group">
-                  <label className="form-label">المسار البيئي</label>
-                  <input 
-                    type="text" 
-                    className="form-control" 
-                    placeholder="مثال: الطاقة النظيفة، إدارة المياه، حماية البيئة"
-                    value={newChallenge.track} 
-                    onChange={e => setNewChallenge({ ...newChallenge, track: e.target.value })} 
-                    required 
-                  />
-                </div>
-              </div>
-
-              <div className="form-group">
-                <label className="form-label">وصف المشكلة والتحدي</label>
-                <textarea 
-                  className="form-textarea" 
-                  placeholder="شرح المشكلة والمطلوب معالجته برمجياً..."
-                  value={newChallenge.description} 
-                  onChange={e => setNewChallenge({ ...newChallenge, description: e.target.value })} 
-                  required 
-                />
-              </div>
-
-              <div className="form-group">
-                <label className="form-label">الأثر البيئي المستهدف</label>
-                <input 
-                  type="text" 
-                  className="form-control" 
-                  placeholder="مثال: خفض الانبعاثات بنسبة 20%، توفير المياه..."
-                  value={newChallenge.targetImpact} 
-                  onChange={e => setNewChallenge({ ...newChallenge, targetImpact: e.target.value })} 
-                />
-              </div>
-
-              <div className="form-group">
-                <label className="form-label">المخرجات المتوقعة (اكتب كل مخرج في سطر)</label>
-                <textarea 
-                  className="form-textarea" 
-                  style={{ minHeight: '70px' }}
-                  placeholder="نموذج أولي عامل
-واجهة مستخدم تفاعلية
-تقرير أثر بيئي"
-                  value={newChallenge.deliverables} 
-                  onChange={e => setNewChallenge({ ...newChallenge, deliverables: e.target.value })} 
-                />
-              </div>
-
-              <button type="submit" className="btn btn-primary">
-                حفظ ونشر التحدي
-              </button>
-            </form>
-          </div>
-
-          <div className="card">
-            <h2 className="card-title">التحديات البيئية المدخلة ({challenges.length})</h2>
-            <div className="grid-2">
-              {challenges.map(ch => (
-                <div key={ch.id} style={{
-                  padding: '16px',
-                  background: 'var(--bg-input)',
-                  border: '1px solid var(--border-color)',
-                  borderRadius: '8px'
-                }}>
-                  <div style={{ marginBottom: '8px' }}>
-                    <span className="badge badge-emerald">{ch.track}</span>
-                  </div>
-                  <h3 style={{ fontSize: '1.1rem', fontWeight: 700, marginBottom: '6px', color: '#f8fafc' }}>
-                    {ch.title}
-                  </h3>
-                  <p style={{ fontSize: '0.86rem', color: 'var(--text-dim)', marginBottom: '10px', lineHeight: 1.6 }}>
-                    {ch.description}
-                  </p>
-                  {ch.targetImpact && (
-                    <div style={{ fontSize: '0.8rem', color: '#22c55e', marginBottom: '8px' }}>
-                      الأثر: {ch.targetImpact}
-                    </div>
-                  )}
-                  <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: '10px' }}>
-                    <button 
-                      onClick={() => handleDeleteChallenge(ch.id)}
-                      className="btn btn-danger btn-sm"
-                    >
-                      حذف
-                    </button>
-                  </div>
-                </div>
-              ))}
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* TAB 4: Manage Criteria */}
+      {/* TAB 3: Criteria Management */}
       {activeTab === 'criteria' && (
         <div>
           <div className="card" style={{ marginBottom: '24px' }}>
-            <h2 className="card-title">إضافة معيار تحكيم</h2>
+            <h2 className="card-title">إضافة معيار تحكيم جديد</h2>
             <p className="card-subtitle">
-              الحكام سيقومون بتقييم الفرق من خلال هذه المعايير
+              هذه المعايير تظهر للحكام في صفحتهم لإدخال الدرجات أمامها
             </p>
+
             <form onSubmit={handleCreateCriterion}>
-              <div className="grid-3">
+              <div className="grid-2">
                 <div className="form-group">
-                  <label className="form-label">اسم المعيار</label>
+                  <label className="form-label">اسم المعيار *</label>
                   <input 
                     type="text" 
                     className="form-control" 
-                    placeholder="مثال: الأثر البيئي والمناخي"
-                    value={newCriterion.name} 
-                    onChange={e => setNewCriterion({ ...newCriterion, name: e.target.value })} 
+                    placeholder="مثال: أصالة الفكرة والابتكار"
+                    value={newCritName} 
+                    onChange={e => setNewCritName(e.target.value)} 
                     required 
                   />
                 </div>
                 <div className="form-group">
-                  <label className="form-label">الدرجة القصوى</label>
+                  <label className="form-label">الدرجة القصوى *</label>
                   <input 
                     type="number" 
                     min="1" 
                     max="100" 
                     className="form-control" 
-                    value={newCriterion.maxScore} 
-                    onChange={e => setNewCriterion({ ...newCriterion, maxScore: Number(e.target.value), weight: Number(e.target.value) })} 
+                    value={newCritMaxScore} 
+                    onChange={e => setNewCritMaxScore(Number(e.target.value))} 
                     required 
-                  />
-                </div>
-                <div className="form-group">
-                  <label className="form-label">الوزن (%)</label>
-                  <input 
-                    type="number" 
-                    min="1" 
-                    max="100" 
-                    className="form-control" 
-                    value={newCriterion.weight} 
-                    onChange={e => setNewCriterion({ ...newCriterion, weight: Number(e.target.value) })} 
                   />
                 </div>
               </div>
 
               <div className="form-group">
-                <label className="form-label">وصف المعيار وتوجيهات الحكم</label>
-                <textarea 
-                  className="form-textarea" 
-                  style={{ minHeight: '60px' }}
-                  placeholder="إرشادات التحكيم..."
-                  value={newCriterion.description} 
-                  onChange={e => setNewCriterion({ ...newCriterion, description: e.target.value })} 
+                <label className="form-label">إرشادات وتوجيهات للحكم حول هذا المعيار</label>
+                <input 
+                  type="text" 
+                  className="form-control" 
+                  placeholder="توجيهات مختصرة لتقييم المعيار..."
+                  value={newCritDesc} 
+                  onChange={e => setNewCritDesc(e.target.value)} 
                 />
               </div>
 
-              <button type="submit" className="btn btn-primary">
+              <button type="submit" className="btn btn-primary" style={{ minWidth: '150px' }}>
                 إضافة المعيار
               </button>
             </form>
           </div>
 
+          {/* Criteria List */}
           <div className="card">
             <h2 className="card-title">معايير التحكيم المعتمدة ({criteria.length})</h2>
             <div className="table-responsive">
@@ -859,21 +843,20 @@ export default function AdminPage() {
                     <th>اسم المعيار</th>
                     <th>الوصف</th>
                     <th>الدرجة القصوى</th>
-                    <th>الوزن</th>
                     <th>إجراءات</th>
                   </tr>
                 </thead>
                 <tbody>
                   {criteria.map(crit => (
                     <tr key={crit.id}>
-                      <td style={{ fontWeight: 700, color: '#f8fafc' }}>{crit.name}</td>
+                      <td style={{ fontWeight: 700, color: 'var(--primary)' }}>{crit.name}</td>
                       <td style={{ fontSize: '0.86rem', color: 'var(--text-dim)', maxWidth: '350px' }}>
                         {crit.description || '-'}
                       </td>
-                      <td style={{ fontWeight: 700 }}>{crit.maxScore} نقطة</td>
-                      <td>{crit.weight}%</td>
+                      <td style={{ fontWeight: 800, color: 'var(--primary)' }}>{crit.maxScore} نقطة</td>
                       <td>
                         <button 
+                          type="button" 
                           onClick={() => handleDeleteCriterion(crit.id)}
                           className="btn btn-danger btn-sm"
                         >
@@ -882,256 +865,31 @@ export default function AdminPage() {
                       </td>
                     </tr>
                   ))}
+                  {criteria.length === 0 && (
+                    <tr>
+                      <td colSpan={4} style={{ textAlign: 'center', padding: '24px', color: 'var(--text-dim)' }}>
+                        لا توجد معايير تحكيم حالياً.
+                      </td>
+                    </tr>
+                  )}
                 </tbody>
               </table>
             </div>
-          </div>
-        </div>
-      )}
 
-      {/* TAB 5: Manage Judges */}
-      {activeTab === 'judges' && (
-        <div>
-          <div className="card" style={{ marginBottom: '24px' }}>
-            <h2 className="card-title">إضافة حساب حكم جديد</h2>
-            <p className="card-subtitle">
-              حسابات الحكام لتقييم المشاريع وفق المعايير
-            </p>
-            <form onSubmit={handleCreateJudge}>
-              <div className="grid-2">
-                <div className="form-group">
-                  <label className="form-label">اسم الحكم</label>
-                  <input 
-                    type="text" 
-                    className="form-control" 
-                    placeholder="مثال: د. سامي الأحمد"
-                    value={newJudge.name} 
-                    onChange={e => setNewJudge({ ...newJudge, name: e.target.value })} 
-                    required 
-                  />
-                </div>
-                <div className="form-group">
-                  <label className="form-label">التخصص</label>
-                  <input 
-                    type="text" 
-                    className="form-control" 
-                    placeholder="مثال: خبير طاقة متجددة"
-                    value={newJudge.specialty} 
-                    onChange={e => setNewJudge({ ...newJudge, specialty: e.target.value })} 
-                  />
-                </div>
-              </div>
-
-              <div className="grid-2">
-                <div className="form-group">
-                  <label className="form-label">البريد الإلكتروني</label>
-                  <input 
-                    type="email" 
-                    className="form-control" 
-                    placeholder="judge@hackathon.com"
-                    value={newJudge.email} 
-                    onChange={e => setNewJudge({ ...newJudge, email: e.target.value })} 
-                    required 
-                  />
-                </div>
-                <div className="form-group">
-                  <label className="form-label">كلمة المرور</label>
-                  <input 
-                    type="text" 
-                    className="form-control" 
-                    placeholder="كلمة مرور الدخول"
-                    value={newJudge.password} 
-                    onChange={e => setNewJudge({ ...newJudge, password: e.target.value })} 
-                    required 
-                  />
-                </div>
-              </div>
-
-              <button type="submit" className="btn btn-primary">
-                إنشاء حساب الحكم
+            {/* Reset Database Button */}
+            <div style={{ marginTop: '24px', paddingTop: '16px', borderTop: '1px solid var(--border-color)', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+              <span style={{ fontSize: '0.82rem', color: 'var(--text-dim)' }}>
+                تصفير البيانات يعيد النظام لحالته الأولية النظيفة مع الحفاظ على حساب الادمن
+              </span>
+              <button 
+                type="button" 
+                onClick={handleResetDatabase}
+                className="btn btn-outline btn-sm"
+                style={{ color: 'var(--danger)' }}
+              >
+                تصفير البيانات بالكامل
               </button>
-            </form>
-          </div>
-
-          <div className="card">
-            <h2 className="card-title">قائمة الحكام المعتمدين ({judges.length})</h2>
-            <div className="table-responsive">
-              <table className="data-table">
-                <thead>
-                  <tr>
-                    <th>اسم الحكم</th>
-                    <th>البريد الإلكتروني</th>
-                    <th>التخصص</th>
-                    <th>تاريخ التسجيل</th>
-                    <th>إجراءات</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {judges.map(j => (
-                    <tr key={j.id}>
-                      <td style={{ fontWeight: 700, color: '#f8fafc' }}>{j.name}</td>
-                      <td>{j.email}</td>
-                      <td><span className="badge badge-emerald">{j.specialty || 'محكم'}</span></td>
-                      <td style={{ fontSize: '0.8rem', color: 'var(--text-dim)' }}>
-                        {new Date(j.createdAt).toLocaleDateString('ar-EG')}
-                      </td>
-                      <td>
-                        <button 
-                          onClick={() => handleDeleteJudge(j.id)}
-                          className="btn btn-danger btn-sm"
-                        >
-                          حذف
-                        </button>
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
             </div>
-          </div>
-        </div>
-      )}
-
-      {/* TAB 6: Submissions & Rankings */}
-      {activeTab === 'submissions' && (
-        <div className="card">
-          <h2 className="card-title">المشاريع المسلمة وتقييمات الحكام</h2>
-          <p className="card-subtitle">
-            يظهر هنا اسم الفريق والمتسابق الذي قام بالتسليم مع تقييمات الحكام
-          </p>
-
-          <div className="table-responsive">
-            <table className="data-table">
-              <thead>
-                <tr>
-                  <th>اسم الفريق</th>
-                  <th>المتسابق المسلِّم</th>
-                  <th>اسم المشروع</th>
-                  <th>التحدي</th>
-                  <th>الروابط</th>
-                  <th>تقييمات الحكام</th>
-                  <th>المتوسط</th>
-                </tr>
-              </thead>
-              <tbody>
-                {submissions.map(sub => {
-                  const teamEvals = evaluations.filter(e => e.submissionId === sub.id);
-                  const avgScore = teamEvals.length > 0 
-                    ? (teamEvals.reduce((acc, curr) => acc + curr.totalScore, 0) / teamEvals.length).toFixed(1)
-                    : 'لم يقيّم بعد';
-
-                  return (
-                    <tr key={sub.id}>
-                      <td style={{ fontWeight: 700, color: '#22c55e' }}>{sub.teamName}</td>
-                      <td style={{ fontSize: '0.88rem', color: '#cbd5e1' }}>
-                        {sub.submittedByUserName || 'عضو الفريق'}
-                      </td>
-                      <td style={{ fontWeight: 600 }}>{sub.projectTitle}</td>
-                      <td style={{ fontSize: '0.84rem' }}>{sub.challengeTitle}</td>
-                      <td>
-                        <div style={{ display: 'flex', gap: '6px', flexWrap: 'wrap' }}>
-                          {sub.demoUrl && (
-                            <a href={sub.demoUrl} target="_blank" rel="noreferrer" className="badge badge-emerald">
-                              النموذج
-                            </a>
-                          )}
-                          {sub.repoUrl && (
-                            <a href={sub.repoUrl} target="_blank" rel="noreferrer" className="badge badge-blue">
-                              الكود
-                            </a>
-                          )}
-                          {sub.presentationUrl && (
-                            <a href={sub.presentationUrl} target="_blank" rel="noreferrer" className="badge badge-amber">
-                              العرض
-                            </a>
-                          )}
-                        </div>
-                      </td>
-                      <td>
-                        {teamEvals.length > 0 ? (
-                          <div>
-                            {teamEvals.map(ev => (
-                              <div key={ev.id} style={{ fontSize: '0.8rem', color: '#94a3b8' }}>
-                                {ev.judgeName}: <strong style={{ color: '#22c55e' }}>{ev.totalScore} نقطة</strong>
-                              </div>
-                            ))}
-                          </div>
-                        ) : (
-                          <span className="badge badge-amber">بانتظار التحكيم</span>
-                        )}
-                      </td>
-                      <td style={{ fontWeight: 800, color: '#22c55e', fontSize: '1rem' }}>
-                        {avgScore}
-                      </td>
-                    </tr>
-                  );
-                })}
-                {submissions.length === 0 && (
-                  <tr>
-                    <td colSpan={7} style={{ textAlign: 'center', padding: '30px' }}>
-                      لم يقم أي فريق بتسليم مشروعه حتى الآن.
-                    </td>
-                  </tr>
-                )}
-              </tbody>
-            </table>
-          </div>
-        </div>
-      )}
-
-      {/* TAB 7: Manage Participants */}
-      {activeTab === 'participants' && (
-        <div className="card">
-          <h2 className="card-title">قائمة المتسابقين المسجلين ({participants.length})</h2>
-          <p className="card-subtitle">
-            عرض وتعديل حسابات المتسابقين والفرق المنضمين إليها
-          </p>
-
-          <div className="table-responsive">
-            <table className="data-table">
-              <thead>
-                <tr>
-                  <th>اسم المتسابق</th>
-                  <th>البريد الإلكتروني</th>
-                  <th>الفريق</th>
-                  <th>التخصص / الدور</th>
-                  <th>رقم الهاتف</th>
-                  <th>تاريخ التسجيل</th>
-                  <th>إجراءات</th>
-                </tr>
-              </thead>
-              <tbody>
-                {participants.map(p => (
-                  <tr key={p.id}>
-                    <td style={{ fontWeight: 700, color: '#ffffff' }}>{p.name}</td>
-                    <td>{p.email}</td>
-                    <td>
-                      <span className="badge badge-emerald">{p.teamName || 'بدون فريق'}</span>
-                    </td>
-                    <td style={{ color: 'var(--text-dim)' }}>{p.specialty || '-'}</td>
-                    <td style={{ color: 'var(--text-dim)' }}>{p.phone || '-'}</td>
-                    <td style={{ fontSize: '0.8rem', color: 'var(--text-dim)' }}>
-                      {new Date(p.createdAt).toLocaleDateString('ar-EG')}
-                    </td>
-                    <td>
-                      <button 
-                        onClick={() => handleDeleteParticipant(p.id)}
-                        className="btn btn-danger btn-sm"
-                      >
-                        حذف
-                      </button>
-                    </td>
-                  </tr>
-                ))}
-                {participants.length === 0 && (
-                  <tr>
-                    <td colSpan={7} style={{ textAlign: 'center', padding: '30px' }}>
-                      لا يوجد متسابقون مسجلون حتى الآن.
-                    </td>
-                  </tr>
-                )}
-              </tbody>
-            </table>
           </div>
         </div>
       )}

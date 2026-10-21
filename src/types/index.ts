@@ -14,8 +14,8 @@ export interface User {
 export interface Team {
   id: string;
   name: string;
-  description: string;
-  maxMembers: number;
+  description?: string;
+  maxMembers?: number;
   track?: string;
   createdAt: string;
   membersCount?: number;
@@ -24,30 +24,35 @@ export interface Team {
 export interface Challenge {
   id: string;
   title: string;
-  track: string;
-  description: string;
-  targetImpact: string;
-  deliverables: string[];
+  track?: string;
+  description?: string;
+  targetImpact?: string;
+  deliverables?: string[];
   createdAt: string;
 }
 
 export interface Criterion {
   id: string;
   name: string;
-  description: string;
+  description?: string;
   maxScore: number;
-  weight: number;
+  weight?: number;
 }
 
 export interface Submission {
   id: string;
-  teamId: string;
+  teamId?: string;
   teamName: string;
-  challengeId: string;
-  challengeTitle: string;
+  members: string;
   projectTitle: string;
-  summary: string;
-  environmentalImpact: string;
+  summary?: string;
+  fileUrl?: string;
+  fileName?: string;
+  fileSize?: number;
+  fileLink?: string;
+  challengeId?: string;
+  challengeTitle?: string;
+  environmentalImpact?: string;
   demoUrl?: string;
   repoUrl?: string;
   presentationUrl?: string;
@@ -60,12 +65,12 @@ export interface Submission {
 export interface Evaluation {
   id: string;
   submissionId: string;
-  teamId: string;
+  teamId?: string;
   judgeId: string;
   judgeName: string;
   scores: Record<string, number>;
   totalScore: number;
-  feedback: string;
+  feedback?: string;
   evaluatedAt: string;
 }
 

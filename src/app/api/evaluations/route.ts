@@ -15,11 +15,13 @@ export async function POST(request: Request) {
   try {
     const { submissionId, teamId, judgeId, judgeName, scores, feedback } = await request.json();
 
-    if (!submissionId || !teamId || !judgeId || !scores) {
+    if (!submissionId || !judgeId || !scores) {
       return NextResponse.json({ error: 'بيانات التقييم غير مكتملة' }, { status: 400 });
     }
 
     const db = getDatabase();
+    const submission = db.submissions.find(s => s.id === submissionId);
+    const resolvedTeamId = teamId || submission?.teamId || submission?.teamName || '';
 
     // Calculate total score based on the scores
     let totalScore = 0;
@@ -34,6 +36,7 @@ export async function POST(request: Request) {
     if (existingIndex >= 0) {
       const updated: Evaluation = {
         ...db.evaluations[existingIndex],
+        teamId: resolvedTeamId,
         scores,
         totalScore,
         feedback: feedback?.trim() || '',
@@ -46,7 +49,7 @@ export async function POST(request: Request) {
       const newEvaluation: Evaluation = {
         id: `eval-${Date.now()}`,
         submissionId,
-        teamId,
+        teamId: resolvedTeamId,
         judgeId,
         judgeName: judgeName || 'حكم',
         scores,
