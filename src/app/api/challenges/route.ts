@@ -2,12 +2,21 @@ import { NextResponse } from 'next/server';
 import { getDatabase, saveDatabase } from '@/lib/db';
 import { Challenge } from '@/types';
 
+export const dynamic = 'force-dynamic';
+export const revalidate = 0;
+
+const noCacheHeaders = {
+  'Cache-Control': 'no-store, no-cache, must-revalidate, proxy-revalidate, max-age=0',
+  'Pragma': 'no-cache',
+  'Expires': '0',
+};
+
 export async function GET() {
   try {
     const db = getDatabase();
-    return NextResponse.json(db.challenges);
+    return NextResponse.json(db.challenges, { headers: noCacheHeaders });
   } catch (err: any) {
-    return NextResponse.json({ error: err.message }, { status: 500 });
+    return NextResponse.json({ error: err.message }, { status: 500, headers: noCacheHeaders });
   }
 }
 
@@ -16,7 +25,7 @@ export async function POST(request: Request) {
     const { title, track, description, targetImpact, deliverables } = await request.json();
 
     if (!title || !description || !track) {
-      return NextResponse.json({ error: 'العنوان والمسار والوصف حقول إجبارية' }, { status: 400 });
+      return NextResponse.json({ error: 'العنوان والمسار والوصف حقول إجبارية' }, { status: 400, headers: noCacheHeaders });
     }
 
     const db = getDatabase();
@@ -37,9 +46,9 @@ export async function POST(request: Request) {
     db.challenges.push(newChallenge);
     saveDatabase(db);
 
-    return NextResponse.json(newChallenge, { status: 201 });
+    return NextResponse.json(newChallenge, { status: 201, headers: noCacheHeaders });
   } catch (err: any) {
-    return NextResponse.json({ error: err.message }, { status: 500 });
+    return NextResponse.json({ error: err.message }, { status: 500, headers: noCacheHeaders });
   }
 }
 
@@ -48,15 +57,15 @@ export async function DELETE(request: Request) {
     const { searchParams } = new URL(request.url);
     const id = searchParams.get('id');
     if (!id) {
-      return NextResponse.json({ error: 'معرف التحدي مطلوب' }, { status: 400 });
+      return NextResponse.json({ error: 'معرف التحدي مطلوب' }, { status: 400, headers: noCacheHeaders });
     }
 
     const db = getDatabase();
     db.challenges = db.challenges.filter(c => c.id !== id);
     saveDatabase(db);
 
-    return NextResponse.json({ success: true });
+    return NextResponse.json({ success: true, deletedId: id }, { headers: noCacheHeaders });
   } catch (err: any) {
-    return NextResponse.json({ error: err.message }, { status: 500 });
+    return NextResponse.json({ error: err.message }, { status: 500, headers: noCacheHeaders });
   }
 }

@@ -68,76 +68,8 @@
       "weight": 25
     }
   ],
-  "submissions": [
-    {
-      "id": "sub-1792540168002",
-      "teamName": "كريم علاء مصطفى صالح",
-      "members": "كريم \nاحمد \nمؤمن",
-      "projectTitle": "معالجة المياه",
-      "summary": "",
-      "fileUrl": "",
-      "fileName": "",
-      "fileSize": 0,
-      "fileLink": "https://drive.google.com/drive/my-drive",
-      "demoUrl": "",
-      "repoUrl": "",
-      "presentationUrl": "",
-      "submittedByUserId": "participant-1792539604271",
-      "submittedByUserName": "كريم علاء مصطفى صالح",
-      "submittedAt": "2026-10-20T23:49:28.002Z"
-    },
-    {
-      "id": "sub-1792540650197",
-      "teamName": "مؤمن",
-      "members": "احمد \nخيزران \nسارة",
-      "projectTitle": "نظام",
-      "summary": "",
-      "fileUrl": "",
-      "fileName": "",
-      "fileSize": 0,
-      "fileLink": "https://docs.google.com/document/d/1HVJwjxzo563kgkoeI28rtNGa4MiPYpJCsyhaX6OWGMk/edit?tab=t.0",
-      "demoUrl": "",
-      "repoUrl": "",
-      "presentationUrl": "",
-      "submittedByUserId": "participant-1792540539022",
-      "submittedByUserName": "مؤمن",
-      "submittedAt": "2026-10-20T23:57:30.197Z"
-    }
-  ],
-  "evaluations": [
-    {
-      "id": "eval-1792540243766",
-      "submissionId": "sub-1792540168002",
-      "teamId": "كريم علاء مصطفى صالح",
-      "judgeId": "judge-1792539932771",
-      "judgeName": "د.راني شهوان",
-      "scores": {
-        "crit-1": 25,
-        "crit-2": 21,
-        "crit-3": 13,
-        "crit-4": 10
-      },
-      "totalScore": 69,
-      "feedback": "",
-      "evaluatedAt": "2026-10-20T23:50:43.766Z"
-    },
-    {
-      "id": "eval-1792540678073",
-      "submissionId": "sub-1792540650197",
-      "teamId": "مؤمن",
-      "judgeId": "judge-1792539932771",
-      "judgeName": "د.راني شهوان",
-      "scores": {
-        "crit-1": 0,
-        "crit-2": 0,
-        "crit-3": 0,
-        "crit-4": 0
-      },
-      "totalScore": 0,
-      "feedback": "",
-      "evaluatedAt": "2026-10-20T23:57:58.073Z"
-    }
-  ],
+  "submissions": [],
+  "evaluations": [],
   "settings": {
     "isSubmissionOpen": true,
     "announcement": ""

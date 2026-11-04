@@ -23,6 +23,7 @@ export default function AdminPage() {
   const [submissions, setSubmissions] = useState<Submission[]>([]);
   const [evaluations, setEvaluations] = useState<Evaluation[]>([]);
   const [loading, setLoading] = useState(true);
+  const [isRefreshing, setIsRefreshing] = useState(false);
   const [message, setMessage] = useState<{ text: string; type: 'success' | 'error' } | null>(null);
 
   // New Account Form
@@ -32,21 +33,51 @@ export default function AdminPage() {
   const [newRole, setNewRole] = useState<'participant' | 'judge' | 'admin'>('participant');
   const [isCreatingUser, setIsCreatingUser] = useState(false);
 
+  // Edit User Form State
+  const [editingUserId, setEditingUserId] = useState<string | null>(null);
+  const [editUserName, setEditUserName] = useState('');
+  const [editUserEmail, setEditUserEmail] = useState('');
+  const [editUserPassword, setEditUserPassword] = useState('');
+  const [editUserRole, setEditUserRole] = useState<'participant' | 'judge' | 'admin'>('participant');
+  const [isUpdatingUser, setIsUpdatingUser] = useState(false);
+
   // New Criterion Form
   const [newCritName, setNewCritName] = useState('');
   const [newCritMaxScore, setNewCritMaxScore] = useState(25);
   const [newCritDesc, setNewCritDesc] = useState('');
+  const [isCreatingCrit, setIsCreatingCrit] = useState(false);
 
-  // Load all data
-  const loadAllData = async () => {
-    setLoading(true);
+  // Edit Criterion Form State
+  const [editingCritId, setEditingCritId] = useState<string | null>(null);
+  const [editCritName, setEditCritName] = useState('');
+  const [editCritMaxScore, setEditCritMaxScore] = useState(25);
+  const [editCritDesc, setEditCritDesc] = useState('');
+  const [isUpdatingCrit, setIsUpdatingCrit] = useState(false);
+
+  // Load all data with strict no-cache to guarantee fresh server storage state
+  const loadAllData = async (isManualRefresh = false) => {
+    if (isManualRefresh) {
+      setIsRefreshing(true);
+    } else {
+      setLoading(true);
+    }
+
     try {
+      const ts = Date.now();
+      const fetchOpts: RequestInit = {
+        cache: 'no-store',
+        headers: {
+          'Cache-Control': 'no-cache, no-store, must-revalidate',
+          'Pragma': 'no-cache',
+        }
+      };
+
       const [settingsRes, usersRes, criteriaRes, subsRes, evalsRes] = await Promise.all([
-        fetch('/api/settings'),
-        fetch('/api/users'),
-        fetch('/api/criteria'),
-        fetch('/api/submissions'),
-        fetch('/api/evaluations')
+        fetch(`/api/settings?_t=${ts}`, fetchOpts),
+        fetch(`/api/users?_t=${ts}`, fetchOpts),
+        fetch(`/api/criteria?_t=${ts}`, fetchOpts),
+        fetch(`/api/submissions?_t=${ts}`, fetchOpts),
+        fetch(`/api/evaluations?_t=${ts}`, fetchOpts)
       ]);
 
       if (settingsRes.ok) setSettings(await settingsRes.json());
@@ -54,10 +85,16 @@ export default function AdminPage() {
       if (criteriaRes.ok) setCriteria(await criteriaRes.json());
       if (subsRes.ok) setSubmissions(await subsRes.json());
       if (evalsRes.ok) setEvaluations(await evalsRes.json());
+
+      if (isManualRefresh) {
+        showNotification('تم تحديث البيانات من الخادم ومطابقتها بالكامل بنجاح');
+      }
     } catch (err) {
-      console.error(err);
+      console.error('Error loading admin data:', err);
+      showNotification('تعذر جلب البيانات من الخادم', 'error');
     } finally {
       setLoading(false);
+      setIsRefreshing(false);
     }
   };
 
@@ -89,7 +126,7 @@ export default function AdminPage() {
           setAuthError('هذا الحساب ليس لديه صلاحيات الادمن');
         } else {
           login(data.user);
-          loadAllData();
+          await loadAllData();
         }
       }
     } catch {
@@ -120,7 +157,7 @@ export default function AdminPage() {
     }
   };
 
-  // Create User Account locally
+  // Create User Account
   const handleCreateUser = async (e: React.FormEvent) => {
     e.preventDefault();
     setIsCreatingUser(true);
@@ -143,8 +180,8 @@ export default function AdminPage() {
         setNewName('');
         setNewEmail('');
         setNewPassword('');
-        setUsersList(prev => [...prev, data]);
-        showNotification(`تم إنشاء الحساب وحفظه محلياً بنجاح! يمكن لـ (${data.name}) تسجيل الدخول الآن.`);
+        await loadAllData();
+        showNotification(`تم إنشاء الحساب وحفظه دائماً بنجاح! يمكن لـ (${data.name}) تسجيل الدخول الآن.`);
       }
     } catch {
       showNotification('تعذر الاتصال بالخادم', 'error');
@@ -153,26 +190,77 @@ export default function AdminPage() {
     }
   };
 
-  // Delete User Account
+  // Start Editing User
+  const handleStartEditUser = (u: User & { password?: string }) => {
+    setEditingUserId(u.id);
+    setEditUserName(u.name);
+    setEditUserEmail(u.email);
+    setEditUserPassword(u.password || '');
+    setEditUserRole(u.role as any);
+  };
+
+  // Cancel Editing User
+  const handleCancelEditUser = () => {
+    setEditingUserId(null);
+    setEditUserName('');
+    setEditUserEmail('');
+    setEditUserPassword('');
+  };
+
+  // Save Edited User
+  const handleSaveEditUser = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!editingUserId) return;
+    setIsUpdatingUser(true);
+    try {
+      const res = await fetch('/api/users', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          id: editingUserId,
+          name: editUserName,
+          email: editUserEmail,
+          password: editUserPassword,
+          role: editUserRole,
+        })
+      });
+
+      const data = await res.json();
+      if (!res.ok) {
+        showNotification(data.error || 'فشل تعديل بيانات الحساب', 'error');
+      } else {
+        setEditingUserId(null);
+        await loadAllData();
+        showNotification(`تم حفظ التعديلات على حساب (${data.name}) نهائياً بنجاح.`);
+      }
+    } catch {
+      showNotification('تعذر الاتصال بالخادم', 'error');
+    } finally {
+      setIsUpdatingUser(false);
+    }
+  };
+
+  // Delete User Account Permanently
   const handleDeleteUser = async (id: string, userName: string) => {
-    if (!confirm(`هل أنت متأكد من حذف حساب "${userName}"؟`)) return;
+    if (!confirm(`هل أنت متأكد من حذف حساب "${userName}" نهائياً من قاعدة البيانات؟`)) return;
     try {
       const res = await fetch(`/api/users?id=${id}`, { method: 'DELETE' });
       if (res.ok) {
-        setUsersList(prev => prev.filter(u => u.id !== id));
-        showNotification('تم حذف الحساب بنجاح');
+        await loadAllData();
+        showNotification('تم حذف الحساب نهائياً من النظام.');
       } else {
         const err = await res.json();
         showNotification(err.error || 'فشل الحذف', 'error');
       }
     } catch {
-      showNotification('خطأ في الاتصال', 'error');
+      showNotification('خطأ في الاتصال بالخادم', 'error');
     }
   };
 
   // Create Criterion
   const handleCreateCriterion = async (e: React.FormEvent) => {
     e.preventDefault();
+    setIsCreatingCrit(true);
     try {
       const res = await fetch('/api/criteria', {
         method: 'POST',
@@ -186,25 +274,75 @@ export default function AdminPage() {
       if (res.ok) {
         setNewCritName('');
         setNewCritDesc('');
-        loadAllData();
-        showNotification('تمت إضافة معيار التحكيم بنجاح');
+        await loadAllData();
+        showNotification('تمت إضافة معيار التحكيم وحفظه دائماً بنجاح');
       } else {
         const err = await res.json();
-        showNotification(err.error || 'خطأ في الإضافة', 'error');
+        showNotification(err.error || 'خطأ في إضافة المعيار', 'error');
       }
     } catch {
-      showNotification('تعذر الاتصال', 'error');
+      showNotification('تعذر الاتصال بالخادم', 'error');
+    } finally {
+      setIsCreatingCrit(false);
     }
   };
 
-  // Delete Criterion
-  const handleDeleteCriterion = async (id: string) => {
-    if (!confirm('هل أنت متأكد من حذف هذا المعيار؟')) return;
+  // Start Editing Criterion
+  const handleStartEditCrit = (crit: Criterion) => {
+    setEditingCritId(crit.id);
+    setEditCritName(crit.name);
+    setEditCritMaxScore(crit.maxScore);
+    setEditCritDesc(crit.description || '');
+  };
+
+  // Cancel Editing Criterion
+  const handleCancelEditCrit = () => {
+    setEditingCritId(null);
+    setEditCritName('');
+    setEditCritMaxScore(25);
+    setEditCritDesc('');
+  };
+
+  // Save Edited Criterion
+  const handleSaveEditCrit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!editingCritId) return;
+    setIsUpdatingCrit(true);
+    try {
+      const res = await fetch('/api/criteria', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          id: editingCritId,
+          name: editCritName,
+          maxScore: Number(editCritMaxScore),
+          description: editCritDesc,
+        })
+      });
+
+      const data = await res.json();
+      if (!res.ok) {
+        showNotification(data.error || 'فشل تعديل المعيار', 'error');
+      } else {
+        setEditingCritId(null);
+        await loadAllData();
+        showNotification('تم حفظ تعديلات المعيار نهائياً بنجاح.');
+      }
+    } catch {
+      showNotification('تعذر الاتصال بالخادم', 'error');
+    } finally {
+      setIsUpdatingCrit(false);
+    }
+  };
+
+  // Delete Criterion Permanently
+  const handleDeleteCriterion = async (id: string, critName: string) => {
+    if (!confirm(`هل أنت متأكد من حذف معيار "${critName}" نهائياً من قاعدة البيانات؟`)) return;
     try {
       const res = await fetch(`/api/criteria?id=${id}`, { method: 'DELETE' });
       if (res.ok) {
-        setCriteria(prev => prev.filter(c => c.id !== id));
-        showNotification('تم حذف المعيار بنجاح');
+        await loadAllData();
+        showNotification('تم حذف المعيار نهائياً من النظام.');
       } else {
         const err = await res.json();
         showNotification(err.error || 'خطأ في الحذف', 'error');
@@ -216,13 +354,12 @@ export default function AdminPage() {
 
   // Delete Submission
   const handleDeleteSubmission = async (id: string, teamName: string) => {
-    if (!confirm(`هل أنت متأكد من حذف تسليم فريق "${teamName}"؟`)) return;
+    if (!confirm(`هل أنت متأكد من حذف تسليم فريق "${teamName}" نهائياً؟`)) return;
     try {
       const res = await fetch(`/api/submissions?id=${id}`, { method: 'DELETE' });
       if (res.ok) {
-        setSubmissions(prev => prev.filter(s => s.id !== id));
-        setEvaluations(prev => prev.filter(e => e.submissionId !== id));
-        showNotification('تم حذف التسليم وتقييماته بنجاح');
+        await loadAllData();
+        showNotification('تم حذف التسليم وتقييماته نهائياً بنجاح');
       } else {
         const err = await res.json();
         showNotification(err.error || 'فشل الحذف', 'error');
@@ -328,7 +465,7 @@ export default function AdminPage() {
 
   return (
     <div className="container" style={{ paddingTop: '30px', paddingBottom: '60px' }}>
-      {/* Top Banner with Submission Toggle - Solid Green and Beige, Zero Icons */}
+      {/* Top Banner with Submission Toggle and Sync button */}
       <div style={{
         background: '#FFFFFF',
         border: '1.5px solid var(--border-color)',
@@ -342,49 +479,67 @@ export default function AdminPage() {
         gap: '16px'
       }}>
         <div>
-          <span className="badge badge-emerald" style={{ marginBottom: '6px' }}>لوحة تحكم الادمن</span>
+          <div style={{ display: 'flex', gap: '8px', alignItems: 'center', marginBottom: '6px' }}>
+            <span className="badge badge-emerald">لوحة تحكم الادمن</span>
+            <span className="badge" style={{ background: '#E2E8F0', color: '#1E293B', fontSize: '0.75rem' }}>
+              تخزين دائم ومباشر
+            </span>
+          </div>
           <h1 style={{ fontSize: 'clamp(1.2rem, 3vw, 1.8rem)', fontWeight: 900, color: 'var(--primary)', marginBottom: '4px' }}>
             GREENOVATE HACKATHON
           </h1>
           <p style={{ color: 'var(--text-dim)', fontSize: '0.88rem' }}>
-            التحكم في فتح وإغلاق التسليم، إنشاء حسابات الفرق والمحكمين، ومتابعة التقييمات
+            إدارة الحسابات والمعايير، التحكم بفتح وإغلاق التسليم، ومتابعة التقييمات
           </p>
         </div>
 
-        {/* PROMINENT SUBMISSION TOGGLE: "خانة فتح التسليم بتنفتح فقط منن عند الادمن" */}
-        <div style={{
-          background: 'var(--bg-body)',
-          border: '1.5px solid var(--border-color)',
-          borderRadius: '6px',
-          padding: '12px 20px',
-          display: 'flex',
-          alignItems: 'center',
-          gap: '16px',
-          flexWrap: 'wrap'
-        }}>
-          <div>
-            <div style={{ fontSize: '0.78rem', color: 'var(--text-dim)' }}>خانة تسليم المشاريع للفرق:</div>
-            <div style={{
-              fontWeight: 800,
-              fontSize: '1rem',
-              color: settings.isSubmissionOpen ? 'var(--primary)' : 'var(--danger)',
-              display: 'flex',
-              alignItems: 'center',
-              gap: '6px'
-            }}>
-              <span className={`status-dot ${settings.isSubmissionOpen ? 'green' : 'red'}`}></span>
-              {settings.isSubmissionOpen ? 'مفتوحة الآن للفرق' : 'مغلقة أمام الفرق'}
-            </div>
-          </div>
-
-          <button 
+        <div style={{ display: 'flex', alignItems: 'center', gap: '12px', flexWrap: 'wrap' }}>
+          {/* Refresh Data Button */}
+          <button
             type="button"
-            onClick={handleToggleSubmission}
-            className={`btn ${settings.isSubmissionOpen ? 'btn-danger' : 'btn-primary'}`}
-            style={{ fontWeight: 700, padding: '9px 18px' }}
+            onClick={() => loadAllData(true)}
+            className="btn btn-outline"
+            disabled={isRefreshing || loading}
+            style={{ fontWeight: 700, padding: '9px 16px' }}
+            title="إعادة جلب ومطابقة أحدث البيانات المحفوظة في السيرفر"
           >
-            {settings.isSubmissionOpen ? 'إغلاق باب التسليم' : 'فتح باب التسليم للفرق'}
+            {isRefreshing ? 'جار التحديث...' : 'تحديث البيانات الآن'}
           </button>
+
+          {/* Submission Toggle */}
+          <div style={{
+            background: 'var(--bg-body)',
+            border: '1.5px solid var(--border-color)',
+            borderRadius: '6px',
+            padding: '8px 16px',
+            display: 'flex',
+            alignItems: 'center',
+            gap: '12px'
+          }}>
+            <div>
+              <div style={{ fontSize: '0.74rem', color: 'var(--text-dim)' }}>بوابة التسليم:</div>
+              <div style={{
+                fontWeight: 800,
+                fontSize: '0.92rem',
+                color: settings.isSubmissionOpen ? 'var(--primary)' : 'var(--danger)',
+                display: 'flex',
+                alignItems: 'center',
+                gap: '6px'
+              }}>
+                <span className={`status-dot ${settings.isSubmissionOpen ? 'green' : 'red'}`}></span>
+                {settings.isSubmissionOpen ? 'مفتوحة للفرق' : 'مغلقة'}
+              </div>
+            </div>
+
+            <button 
+              type="button" 
+              onClick={handleToggleSubmission}
+              className={`btn btn-sm ${settings.isSubmissionOpen ? 'btn-danger' : 'btn-primary'}`}
+              style={{ fontWeight: 700 }}
+            >
+              {settings.isSubmissionOpen ? 'إغلاق التسليم' : 'فتح التسليم'}
+            </button>
+          </div>
         </div>
       </div>
 
@@ -397,21 +552,21 @@ export default function AdminPage() {
       {/* Navigation Tabs */}
       <div className="tabs-header" style={{ marginBottom: '20px' }}>
         <button 
-          type="button"
+          type="button" 
           className={`tab-btn ${activeTab === 'submissions' ? 'active' : ''}`}
           onClick={() => setActiveTab('submissions')}
         >
-          المشاريع المسلمة وتقييمات الحكام ({submissions.length})
+          المشاريع المسلمة والتقييمات ({submissions.length})
         </button>
         <button 
-          type="button"
+          type="button" 
           className={`tab-btn ${activeTab === 'users' ? 'active' : ''}`}
           onClick={() => setActiveTab('users')}
         >
-          إنشاء وإدارة الحسابات ({usersList.length})
+          الحسابات والمستخدمين ({usersList.length})
         </button>
         <button 
-          type="button"
+          type="button" 
           className={`tab-btn ${activeTab === 'criteria' ? 'active' : ''}`}
           onClick={() => setActiveTab('criteria')}
         >
@@ -440,7 +595,7 @@ export default function AdminPage() {
             </div>
           </div>
 
-          {/* Submissions & Detailed Evaluations List */}
+          {/* Submissions List */}
           <div className="card">
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px', flexWrap: 'wrap', gap: '10px' }}>
               <div>
@@ -478,7 +633,6 @@ export default function AdminPage() {
                       padding: '20px',
                     }}
                   >
-                    {/* Top Row: Rank, Project Title, Team, Members */}
                     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', flexWrap: 'wrap', gap: '12px', marginBottom: '12px' }}>
                       <div>
                         <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '4px' }}>
@@ -500,7 +654,6 @@ export default function AdminPage() {
                         </div>
                       </div>
 
-                      {/* Average Score Badge */}
                       <div style={{ textAlign: 'left' }}>
                         <div style={{ fontSize: '0.75rem', color: 'var(--text-dim)' }}>معدل الحكام:</div>
                         <div style={{ fontSize: '1.3rem', fontWeight: 900, color: sub.evalsCount > 0 ? 'var(--primary)' : 'var(--text-dim)' }}>
@@ -512,7 +665,6 @@ export default function AdminPage() {
                       </div>
                     </div>
 
-                    {/* Files & Links - Zero Icons */}
                     <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap', marginBottom: '14px', alignItems: 'center' }}>
                       <span style={{ fontSize: '0.82rem', color: 'var(--text-dim)' }}>الملفات والروابط:</span>
                       
@@ -556,18 +708,16 @@ export default function AdminPage() {
                         className="btn btn-danger btn-sm"
                         style={{ marginRight: 'auto' }}
                       >
-                        حذف التسليم
+                        حذف التسليم نهائياً
                       </button>
                     </div>
 
-                    {/* Summary */}
                     {sub.summary && (
                       <p style={{ fontSize: '0.85rem', color: 'var(--text-dim)', marginBottom: '14px', lineHeight: 1.6 }}>
                         <strong style={{ color: 'var(--text-main)' }}>نبذة: </strong> {sub.summary}
                       </p>
                     )}
 
-                    {/* Judges Evaluations Breakdown */}
                     <div style={{
                       background: '#FFFFFF',
                       borderRadius: '6px',
@@ -632,13 +782,98 @@ export default function AdminPage() {
         </div>
       )}
 
-      {/* TAB 2: Accounts Management (Create Emails locally) */}
+      {/* TAB 2: Accounts Management */}
       {activeTab === 'users' && (
         <div>
+          {/* Edit User Form (when active) */}
+          {editingUserId && (
+            <div className="card" style={{ marginBottom: '24px', border: '2px solid var(--primary)' }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '12px' }}>
+                <h2 className="card-title" style={{ margin: 0, color: 'var(--primary)' }}>
+                  تعديل بيانات الحساب
+                </h2>
+                <button type="button" onClick={handleCancelEditUser} className="btn btn-outline btn-sm">
+                  إلغاء التعديل
+                </button>
+              </div>
+
+              <form onSubmit={handleSaveEditUser}>
+                <div className="grid-2">
+                  <div className="form-group">
+                    <label className="form-label">الاسم الكامل / اسم الفريق أو الحكم *</label>
+                    <input 
+                      type="text" 
+                      className="form-control" 
+                      value={editUserName} 
+                      onChange={e => setEditUserName(e.target.value)} 
+                      required 
+                    />
+                  </div>
+
+                  <div className="form-group">
+                    <label className="form-label">نوع الحساب (الدور) *</label>
+                    <select 
+                      className="form-select"
+                      value={editUserRole}
+                      onChange={e => setEditUserRole(e.target.value as any)}
+                    >
+                      <option value="participant">فريق مشارك (يقوم بالتسليم فقط)</option>
+                      <option value="judge">محكّم (يقوم بتقييم المشاريع فقط)</option>
+                      <option value="admin">مسؤول إدارة (ادمن)</option>
+                    </select>
+                  </div>
+                </div>
+
+                <div className="grid-2">
+                  <div className="form-group">
+                    <label className="form-label">البريد الإلكتروني المعتمد *</label>
+                    <input 
+                      type="email" 
+                      className="form-control" 
+                      value={editUserEmail} 
+                      onChange={e => setEditUserEmail(e.target.value)} 
+                      required 
+                    />
+                  </div>
+
+                  <div className="form-group">
+                    <label className="form-label">كلمة المرور *</label>
+                    <input 
+                      type="text" 
+                      className="form-control" 
+                      value={editUserPassword} 
+                      onChange={e => setEditUserPassword(e.target.value)} 
+                      required 
+                    />
+                  </div>
+                </div>
+
+                <div style={{ display: 'flex', gap: '10px' }}>
+                  <button 
+                    type="submit" 
+                    className="btn btn-primary"
+                    disabled={isUpdatingUser}
+                    style={{ minWidth: '160px', height: '42px', fontWeight: 700 }}
+                  >
+                    {isUpdatingUser ? 'جار الحفظ...' : 'حفظ التعديلات نهائياً'}
+                  </button>
+                  <button 
+                    type="button" 
+                    onClick={handleCancelEditUser}
+                    className="btn btn-outline"
+                  >
+                    إلغاء
+                  </button>
+                </div>
+              </form>
+            </div>
+          )}
+
+          {/* Create User Form */}
           <div className="card" style={{ marginBottom: '24px' }}>
-            <h2 className="card-title">إنشاء حساب رسمي جديد (يُحفظ محلياً)</h2>
+            <h2 className="card-title">إنشاء حساب رسمي جديد (يُحفظ دائماً)</h2>
             <p className="card-subtitle">
-              حسابات الفرق ولجنة التحكيم تصدر حصرياً من هنا وتخزن محلياً في قاعدة البيانات
+              حسابات الفرق ولجنة التحكيم تصدر حصرياً من هنا وتخزن دائماً وبشكل نهائي في قاعدة البيانات
             </p>
 
             <form onSubmit={handleCreateUser}>
@@ -701,17 +936,32 @@ export default function AdminPage() {
                 disabled={isCreatingUser}
                 style={{ minWidth: '180px', height: '44px', fontWeight: 700 }}
               >
-                {isCreatingUser ? 'جار الحفظ...' : 'إنشاء وحفظ الحساب محلياً'}
+                {isCreatingUser ? 'جار الحفظ...' : 'إنشاء وحفظ الحساب نهائياً'}
               </button>
             </form>
           </div>
 
           {/* Users Table */}
           <div className="card">
-            <h2 className="card-title">قائمة الحسابات المعتمدة ({usersList.length})</h2>
-            <p className="card-subtitle">
-              جميع الحسابات المخزنة محلياً والتي يمكن لأصحابها الدخول للنظام
-            </p>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px', flexWrap: 'wrap', gap: '10px' }}>
+              <div>
+                <h2 className="card-title" style={{ margin: 0 }}>
+                  قائمة الحسابات المعتمدة ({usersList.length})
+                </h2>
+                <p className="card-subtitle" style={{ margin: 0, marginTop: '4px' }}>
+                  جميع الحسابات المخزنة بشكل دائم، يمكن تعديلها أو حذفها نهائياً
+                </p>
+              </div>
+
+              <button 
+                type="button" 
+                onClick={() => loadAllData(true)} 
+                className="btn btn-outline btn-sm"
+                disabled={isRefreshing}
+              >
+                {isRefreshing ? 'جار التحديث...' : 'تحديث القائمة'}
+              </button>
+            </div>
 
             <div className="table-responsive">
               <table className="data-table">
@@ -749,20 +999,32 @@ export default function AdminPage() {
                         </span>
                       </td>
                       <td style={{ fontSize: '0.8rem', color: 'var(--text-dim)' }}>
-                        {new Date(u.createdAt).toLocaleDateString('ar-EG')}
+                        {u.createdAt ? new Date(u.createdAt).toLocaleDateString('ar-EG') : '-'}
                       </td>
                       <td>
-                        {u.id !== 'admin-1' ? (
+                        <div style={{ display: 'flex', gap: '6px' }}>
                           <button 
                             type="button" 
-                            onClick={() => handleDeleteUser(u.id, u.name)}
-                            className="btn btn-danger btn-sm"
+                            onClick={() => handleStartEditUser(u)}
+                            className="btn btn-outline btn-sm"
+                            style={{ padding: '4px 10px' }}
                           >
-                            حذف
+                            تعديل
                           </button>
-                        ) : (
-                          <span style={{ fontSize: '0.75rem', color: 'var(--text-dim)' }}>رئيسي</span>
-                        )}
+
+                          {u.id !== 'admin-1' ? (
+                            <button 
+                              type="button" 
+                              onClick={() => handleDeleteUser(u.id, u.name)}
+                              className="btn btn-danger btn-sm"
+                              style={{ padding: '4px 10px' }}
+                            >
+                              حذف نهائي
+                            </button>
+                          ) : (
+                            <span style={{ fontSize: '0.75rem', color: 'var(--text-dim)', alignSelf: 'center' }}>رئيسي</span>
+                          )}
+                        </div>
                       </td>
                     </tr>
                   ))}
@@ -783,10 +1045,80 @@ export default function AdminPage() {
       {/* TAB 3: Criteria Management */}
       {activeTab === 'criteria' && (
         <div>
+          {/* Edit Criterion Form (when active) */}
+          {editingCritId && (
+            <div className="card" style={{ marginBottom: '24px', border: '2px solid var(--primary)' }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '12px' }}>
+                <h2 className="card-title" style={{ margin: 0, color: 'var(--primary)' }}>
+                  تعديل معيار التحكيم
+                </h2>
+                <button type="button" onClick={handleCancelEditCrit} className="btn btn-outline btn-sm">
+                  إلغاء التعديل
+                </button>
+              </div>
+
+              <form onSubmit={handleSaveEditCrit}>
+                <div className="grid-2">
+                  <div className="form-group">
+                    <label className="form-label">اسم المعيار *</label>
+                    <input 
+                      type="text" 
+                      className="form-control" 
+                      value={editCritName} 
+                      onChange={e => setEditCritName(e.target.value)} 
+                      required 
+                    />
+                  </div>
+                  <div className="form-group">
+                    <label className="form-label">الدرجة القصوى *</label>
+                    <input 
+                      type="number" 
+                      min="1" 
+                      max="100" 
+                      className="form-control" 
+                      value={editCritMaxScore} 
+                      onChange={e => setEditCritMaxScore(Number(e.target.value))} 
+                      required 
+                    />
+                  </div>
+                </div>
+
+                <div className="form-group">
+                  <label className="form-label">إرشادات وتوجيهات للحكم حول هذا المعيار</label>
+                  <input 
+                    type="text" 
+                    className="form-control" 
+                    value={editCritDesc} 
+                    onChange={e => setEditCritDesc(e.target.value)} 
+                  />
+                </div>
+
+                <div style={{ display: 'flex', gap: '10px' }}>
+                  <button 
+                    type="submit" 
+                    className="btn btn-primary"
+                    disabled={isUpdatingCrit}
+                    style={{ minWidth: '160px', height: '42px', fontWeight: 700 }}
+                  >
+                    {isUpdatingCrit ? 'جار الحفظ...' : 'حفظ تعديلات المعيار'}
+                  </button>
+                  <button 
+                    type="button" 
+                    onClick={handleCancelEditCrit}
+                    className="btn btn-outline"
+                  >
+                    إلغاء
+                  </button>
+                </div>
+              </form>
+            </div>
+          )}
+
+          {/* Create Criterion Form */}
           <div className="card" style={{ marginBottom: '24px' }}>
-            <h2 className="card-title">إضافة معيار تحكيم جديد</h2>
+            <h2 className="card-title">إضافة معيار تحكيم جديد (يُحفظ دائماً)</h2>
             <p className="card-subtitle">
-              هذه المعايير تظهر للحكام في صفحتهم لإدخال الدرجات أمامها
+              هذه المعايير تظهر للحكام في صفحتهم لتقييم المشاريع وتُحفظ دائماً وبشكل نهائي في قاعدة البيانات
             </p>
 
             <form onSubmit={handleCreateCriterion}>
@@ -827,21 +1159,45 @@ export default function AdminPage() {
                 />
               </div>
 
-              <button type="submit" className="btn btn-primary" style={{ minWidth: '150px' }}>
-                إضافة المعيار
+              <button 
+                type="submit" 
+                className="btn btn-primary" 
+                disabled={isCreatingCrit}
+                style={{ minWidth: '160px', height: '44px', fontWeight: 700 }}
+              >
+                {isCreatingCrit ? 'جار الإضافة...' : 'إضافة وحفظ المعيار'}
               </button>
             </form>
           </div>
 
           {/* Criteria List */}
           <div className="card">
-            <h2 className="card-title">معايير التحكيم المعتمدة ({criteria.length})</h2>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px', flexWrap: 'wrap', gap: '10px' }}>
+              <div>
+                <h2 className="card-title" style={{ margin: 0 }}>
+                  معايير التحكيم المعتمدة ({criteria.length})
+                </h2>
+                <p className="card-subtitle" style={{ margin: 0, marginTop: '4px' }}>
+                  إجمالي درجات التقييم القصوى: <strong>{maxTotalScore} نقطة</strong>
+                </p>
+              </div>
+
+              <button 
+                type="button" 
+                onClick={() => loadAllData(true)} 
+                className="btn btn-outline btn-sm"
+                disabled={isRefreshing}
+              >
+                {isRefreshing ? 'جار التحديث...' : 'تحديث القائمة'}
+              </button>
+            </div>
+
             <div className="table-responsive">
               <table className="data-table">
                 <thead>
                   <tr>
                     <th>اسم المعيار</th>
-                    <th>الوصف</th>
+                    <th>الوصف والإرشادات</th>
                     <th>الدرجة القصوى</th>
                     <th>إجراءات</th>
                   </tr>
@@ -855,20 +1211,31 @@ export default function AdminPage() {
                       </td>
                       <td style={{ fontWeight: 800, color: 'var(--primary)' }}>{crit.maxScore} نقطة</td>
                       <td>
-                        <button 
-                          type="button" 
-                          onClick={() => handleDeleteCriterion(crit.id)}
-                          className="btn btn-danger btn-sm"
-                        >
-                          حذف
-                        </button>
+                        <div style={{ display: 'flex', gap: '6px' }}>
+                          <button 
+                            type="button" 
+                            onClick={() => handleStartEditCrit(crit)}
+                            className="btn btn-outline btn-sm"
+                            style={{ padding: '4px 10px' }}
+                          >
+                            تعديل
+                          </button>
+                          <button 
+                            type="button" 
+                            onClick={() => handleDeleteCriterion(crit.id, crit.name)}
+                            className="btn btn-danger btn-sm"
+                            style={{ padding: '4px 10px' }}
+                          >
+                            حذف نهائي
+                          </button>
+                        </div>
                       </td>
                     </tr>
                   ))}
                   {criteria.length === 0 && (
                     <tr>
                       <td colSpan={4} style={{ textAlign: 'center', padding: '24px', color: 'var(--text-dim)' }}>
-                        لا توجد معايير تحكيم حالياً.
+                        لا توجد معايير تحكيم حالياً. أضف معياراً من النموذج أعلاه.
                       </td>
                     </tr>
                   )}
@@ -877,9 +1244,9 @@ export default function AdminPage() {
             </div>
 
             {/* Reset Database Button */}
-            <div style={{ marginTop: '24px', paddingTop: '16px', borderTop: '1px solid var(--border-color)', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+            <div style={{ marginTop: '24px', paddingTop: '16px', borderTop: '1px solid var(--border-color)', display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '10px' }}>
               <span style={{ fontSize: '0.82rem', color: 'var(--text-dim)' }}>
-                تصفير البيانات يعيد النظام لحالته الأولية النظيفة مع الحفاظ على حساب الادمن
+                تصفير البيانات يعيد النظام لحالة نظيفة خالية تماماً مع الحفاظ على حساب الادمن
               </span>
               <button 
                 type="button" 

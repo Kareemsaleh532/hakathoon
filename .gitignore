@@ -36,3 +36,10 @@ yarn-error.log*
 # uploads
 /public/uploads/*
 !/public/uploads/.gitkeep
+
+# db backups and temps
+*.bak
+*.tmp
+data/*.bak
+data/*.tmp
+

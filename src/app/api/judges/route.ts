@@ -2,15 +2,24 @@ import { NextResponse } from 'next/server';
 import { getDatabase, saveDatabase } from '@/lib/db';
 import { User } from '@/types';
 
+export const dynamic = 'force-dynamic';
+export const revalidate = 0;
+
+const noCacheHeaders = {
+  'Cache-Control': 'no-store, no-cache, must-revalidate, proxy-revalidate, max-age=0',
+  'Pragma': 'no-cache',
+  'Expires': '0',
+};
+
 export async function GET() {
   try {
     const db = getDatabase();
     const judges = db.users
       .filter(u => u.role === 'judge')
       .map(({ password: _, ...safe }) => safe);
-    return NextResponse.json(judges);
+    return NextResponse.json(judges, { headers: noCacheHeaders });
   } catch (err: any) {
-    return NextResponse.json({ error: err.message }, { status: 500 });
+    return NextResponse.json({ error: err.message }, { status: 500, headers: noCacheHeaders });
   }
 }
 
@@ -19,14 +28,14 @@ export async function POST(request: Request) {
     const { name, email, password, specialty } = await request.json();
 
     if (!name || !email || !password) {
-      return NextResponse.json({ error: 'الاسم والبريد الإلكتروني وكلمة المرور مطلوبة' }, { status: 400 });
+      return NextResponse.json({ error: 'الاسم والبريد الإلكتروني وكلمة المرور مطلوبة' }, { status: 400, headers: noCacheHeaders });
     }
 
     const db = getDatabase();
     const normalizedEmail = email.trim().toLowerCase();
 
     if (db.users.some(u => u.email.toLowerCase() === normalizedEmail)) {
-      return NextResponse.json({ error: 'البريد الإلكتروني مسجل بالفعل' }, { status: 409 });
+      return NextResponse.json({ error: 'البريد الإلكتروني مسجل بالفعل' }, { status: 409, headers: noCacheHeaders });
     }
 
     const newJudge: User & { password?: string } = {
@@ -43,9 +52,9 @@ export async function POST(request: Request) {
     saveDatabase(db);
 
     const { password: _, ...safe } = newJudge;
-    return NextResponse.json(safe, { status: 201 });
+    return NextResponse.json(safe, { status: 201, headers: noCacheHeaders });
   } catch (err: any) {
-    return NextResponse.json({ error: err.message }, { status: 500 });
+    return NextResponse.json({ error: err.message }, { status: 500, headers: noCacheHeaders });
   }
 }
 
@@ -55,23 +64,22 @@ export async function DELETE(request: Request) {
     const id = searchParams.get('id');
 
     if (!id) {
-      return NextResponse.json({ error: 'معرف الحكم مطلوب' }, { status: 400 });
+      return NextResponse.json({ error: 'معرف الحكم مطلوب' }, { status: 400, headers: noCacheHeaders });
     }
 
     const db = getDatabase();
     const index = db.users.findIndex(u => u.id === id && u.role === 'judge');
 
     if (index === -1) {
-      return NextResponse.json({ error: 'الحكم غير موجود' }, { status: 404 });
+      return NextResponse.json({ error: 'الحكم غير موجود' }, { status: 404, headers: noCacheHeaders });
     }
 
     db.users.splice(index, 1);
-    // Also remove evaluations by this judge
     db.evaluations = db.evaluations.filter(e => e.judgeId !== id);
     saveDatabase(db);
 
-    return NextResponse.json({ success: true });
+    return NextResponse.json({ success: true, deletedId: id }, { headers: noCacheHeaders });
   } catch (err: any) {
-    return NextResponse.json({ error: err.message }, { status: 500 });
+    return NextResponse.json({ error: err.message }, { status: 500, headers: noCacheHeaders });
   }
 }

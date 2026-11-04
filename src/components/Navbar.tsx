@@ -15,7 +15,7 @@ export default function Navbar() {
   useEffect(() => {
     const fetchStatus = async () => {
       try {
-        const res = await fetch('/api/settings');
+        const res = await fetch(`/api/settings?_t=${Date.now()}`, { cache: 'no-store' });
         if (res.ok) {
           const data = await res.json();
           setIsSubmissionOpen(data.isSubmissionOpen);

@@ -2,12 +2,21 @@ import { NextResponse } from 'next/server';
 import { getDatabase, saveDatabase } from '@/lib/db';
 import { Evaluation } from '@/types';
 
+export const dynamic = 'force-dynamic';
+export const revalidate = 0;
+
+const noCacheHeaders = {
+  'Cache-Control': 'no-store, no-cache, must-revalidate, proxy-revalidate, max-age=0',
+  'Pragma': 'no-cache',
+  'Expires': '0',
+};
+
 export async function GET() {
   try {
     const db = getDatabase();
-    return NextResponse.json(db.evaluations);
+    return NextResponse.json(db.evaluations, { headers: noCacheHeaders });
   } catch (err: any) {
-    return NextResponse.json({ error: err.message }, { status: 500 });
+    return NextResponse.json({ error: err.message }, { status: 500, headers: noCacheHeaders });
   }
 }
 
@@ -16,7 +25,7 @@ export async function POST(request: Request) {
     const { submissionId, teamId, judgeId, judgeName, scores, feedback } = await request.json();
 
     if (!submissionId || !judgeId || !scores) {
-      return NextResponse.json({ error: 'بيانات التقييم غير مكتملة' }, { status: 400 });
+      return NextResponse.json({ error: 'بيانات التقييم غير مكتملة' }, { status: 400, headers: noCacheHeaders });
     }
 
     const db = getDatabase();
@@ -44,7 +53,7 @@ export async function POST(request: Request) {
       };
       db.evaluations[existingIndex] = updated;
       saveDatabase(db);
-      return NextResponse.json(updated);
+      return NextResponse.json(updated, { headers: noCacheHeaders });
     } else {
       const newEvaluation: Evaluation = {
         id: `eval-${Date.now()}`,
@@ -59,9 +68,9 @@ export async function POST(request: Request) {
       };
       db.evaluations.push(newEvaluation);
       saveDatabase(db);
-      return NextResponse.json(newEvaluation, { status: 201 });
+      return NextResponse.json(newEvaluation, { status: 201, headers: noCacheHeaders });
     }
   } catch (err: any) {
-    return NextResponse.json({ error: err.message }, { status: 500 });
+    return NextResponse.json({ error: err.message }, { status: 500, headers: noCacheHeaders });
   }
 }

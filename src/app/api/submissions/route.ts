@@ -2,12 +2,21 @@ import { NextResponse } from 'next/server';
 import { getDatabase, saveDatabase } from '@/lib/db';
 import { Submission } from '@/types';
 
+export const dynamic = 'force-dynamic';
+export const revalidate = 0;
+
+const noCacheHeaders = {
+  'Cache-Control': 'no-store, no-cache, must-revalidate, proxy-revalidate, max-age=0',
+  'Pragma': 'no-cache',
+  'Expires': '0',
+};
+
 export async function GET() {
   try {
     const db = getDatabase();
-    return NextResponse.json(db.submissions);
+    return NextResponse.json(db.submissions, { headers: noCacheHeaders });
   } catch (err: any) {
-    return NextResponse.json({ error: err.message }, { status: 500 });
+    return NextResponse.json({ error: err.message }, { status: 500, headers: noCacheHeaders });
   }
 }
 
@@ -19,7 +28,7 @@ export async function POST(request: Request) {
     if (!db.settings.isSubmissionOpen) {
       return NextResponse.json(
         { error: 'بوابة التسليم مغلقة حالياً من قبل إدارة الهاكاثون.' },
-        { status: 403 }
+        { status: 403, headers: noCacheHeaders }
       );
     }
 
@@ -41,19 +50,19 @@ export async function POST(request: Request) {
     if (!userId) {
       return NextResponse.json(
         { error: 'يجب تسجيل الدخول أولاً لتسليم المشروع' },
-        { status: 401 }
+        { status: 401, headers: noCacheHeaders }
       );
     }
 
     const user = db.users.find(u => u.id === userId);
     if (!user) {
-      return NextResponse.json({ error: 'المستخدم غير موجود' }, { status: 404 });
+      return NextResponse.json({ error: 'المستخدم غير موجود' }, { status: 404, headers: noCacheHeaders });
     }
 
     if (!teamName || !members || !projectTitle) {
       return NextResponse.json(
         { error: 'اسم الفريق، أسماء الأعضاء، واسم المشروع حقول مطلوبة أساسية' },
-        { status: 400 }
+        { status: 400, headers: noCacheHeaders }
       );
     }
 
@@ -61,7 +70,7 @@ export async function POST(request: Request) {
     if (!fileUrl && !fileLink && !repoUrl && !demoUrl) {
       return NextResponse.json(
         { error: 'يرجى إرفاق الملف المطلوب (رفع ملف أو وضع رابط الملف/المشروع)' },
-        { status: 400 }
+        { status: 400, headers: noCacheHeaders }
       );
     }
 
@@ -93,7 +102,7 @@ export async function POST(request: Request) {
 
       db.submissions[existingIndex] = updated;
       saveDatabase(db);
-      return NextResponse.json(updated);
+      return NextResponse.json(updated, { headers: noCacheHeaders });
     } else {
       // Create new submission
       const newSubmission: Submission = {
@@ -116,10 +125,10 @@ export async function POST(request: Request) {
 
       db.submissions.push(newSubmission);
       saveDatabase(db);
-      return NextResponse.json(newSubmission, { status: 201 });
+      return NextResponse.json(newSubmission, { status: 201, headers: noCacheHeaders });
     }
   } catch (err: any) {
-    return NextResponse.json({ error: err.message }, { status: 500 });
+    return NextResponse.json({ error: err.message }, { status: 500, headers: noCacheHeaders });
   }
 }
 
@@ -129,14 +138,14 @@ export async function DELETE(request: Request) {
     const id = searchParams.get('id');
 
     if (!id) {
-      return NextResponse.json({ error: 'معرف التسليم مطلوب' }, { status: 400 });
+      return NextResponse.json({ error: 'معرف التسليم مطلوب' }, { status: 400, headers: noCacheHeaders });
     }
 
     const db = getDatabase();
     const index = db.submissions.findIndex(s => s.id === id);
 
     if (index === -1) {
-      return NextResponse.json({ error: 'التسليم غير موجود' }, { status: 404 });
+      return NextResponse.json({ error: 'التسليم غير موجود' }, { status: 404, headers: noCacheHeaders });
     }
 
     db.submissions.splice(index, 1);
@@ -144,8 +153,8 @@ export async function DELETE(request: Request) {
     db.evaluations = db.evaluations.filter(e => e.submissionId !== id);
     saveDatabase(db);
 
-    return NextResponse.json({ success: true });
+    return NextResponse.json({ success: true, deletedId: id }, { headers: noCacheHeaders });
   } catch (err: any) {
-    return NextResponse.json({ error: err.message }, { status: 500 });
+    return NextResponse.json({ error: err.message }, { status: 500, headers: noCacheHeaders });
   }
 }

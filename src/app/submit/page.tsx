@@ -36,9 +36,10 @@ export default function SubmitPage() {
   const loadData = async () => {
     setLoading(true);
     try {
+      const ts = Date.now();
       const [settingsRes, subsRes] = await Promise.all([
-        fetch('/api/settings'),
-        fetch('/api/submissions')
+        fetch(`/api/settings?_t=${ts}`, { cache: 'no-store' }),
+        fetch(`/api/submissions?_t=${ts}`, { cache: 'no-store' })
       ]);
 
       if (settingsRes.ok) {

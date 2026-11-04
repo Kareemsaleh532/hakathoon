@@ -30,10 +30,11 @@ export default function JudgePage() {
   const loadData = async () => {
     setLoading(true);
     try {
+      const ts = Date.now();
       const [critRes, subsRes, evalsRes] = await Promise.all([
-        fetch('/api/criteria'),
-        fetch('/api/submissions'),
-        fetch('/api/evaluations')
+        fetch(`/api/criteria?_t=${ts}`, { cache: 'no-store' }),
+        fetch(`/api/submissions?_t=${ts}`, { cache: 'no-store' }),
+        fetch(`/api/evaluations?_t=${ts}`, { cache: 'no-store' })
       ]);
 
       const critData: Criterion[] = critRes.ok ? await critRes.json() : [];

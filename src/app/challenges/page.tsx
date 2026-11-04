@@ -14,7 +14,7 @@ export default function ChallengesPage() {
   useEffect(() => {
     const fetchChallenges = async () => {
       try {
-        const res = await fetch('/api/challenges');
+        const res = await fetch(`/api/challenges?_t=${Date.now()}`, { cache: 'no-store' });
         if (res.ok) {
           const data = await res.json();
           setChallenges(data);
