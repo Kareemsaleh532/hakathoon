@@ -274,6 +274,15 @@ export default function JudgePage() {
         <div style={{ textAlign: 'center', padding: '60px 0', color: 'var(--text-dim)' }}>
           جار تحميل المشاريع المسلمة...
         </div>
+      ) : criteria.length === 0 ? (
+        <div className="card" style={{ textAlign: 'center', padding: '60px 20px' }}>
+          <h3 style={{ fontSize: '1.2rem', fontWeight: 800, marginBottom: '8px', color: 'var(--primary)' }}>
+            لا توجد معايير تحكيم معتمدة بعد
+          </h3>
+          <p style={{ color: 'var(--text-dim)', fontSize: '0.9rem', maxWidth: '460px', margin: '0 auto' }}>
+            يجب على إدارة الهاكاثون إضافة معايير التحكيم من لوحة الادمن قبل بدء التقييم.
+          </p>
+        </div>
       ) : submissions.length === 0 ? (
         <div className="card" style={{ textAlign: 'center', padding: '60px 20px' }}>
           <h3 style={{ fontSize: '1.2rem', fontWeight: 800, marginBottom: '8px', color: 'var(--primary)' }}>

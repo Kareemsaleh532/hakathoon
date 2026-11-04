@@ -29,36 +29,7 @@ export const initialDatabase: DatabaseSchema = {
   ],
   teams: [],
   challenges: [],
-  criteria: [
-    {
-      id: 'crit-1',
-      name: 'أصالة الفكرة والابتكار',
-      description: 'مدى جدة الفكرة وابتكار الحل المقدم وتميزه عن الحلول التقليدية.',
-      maxScore: 25,
-      weight: 25,
-    },
-    {
-      id: 'crit-2',
-      name: 'جودة التنفيذ والحل التقني',
-      description: 'اكتمال العمل التقني وجودة بناء المشروع وقابليته للعمل.',
-      maxScore: 25,
-      weight: 25,
-    },
-    {
-      id: 'crit-3',
-      name: 'الأثر والجدوى الواقعية',
-      description: 'الأثر البيئي/المجتمعي وإمكانية تطبيق المشروع واستدامته على أرض الواقع.',
-      maxScore: 25,
-      weight: 25,
-    },
-    {
-      id: 'crit-4',
-      name: 'جودة العرض والتسليم',
-      description: 'وضوح الملفات المسلّمة وتنظيم الأفكار وشمولية التسليم.',
-      maxScore: 25,
-      weight: 25,
-    }
-  ],
+  criteria: [],
   submissions: [],
   evaluations: [],
   settings: {
