@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import { getDatabase, saveDatabase } from '@/lib/db';
+import { supabase, isSupabaseConfigured } from '@/lib/supabase';
 import { Criterion } from '@/types';
 
 export const dynamic = 'force-dynamic';
@@ -13,6 +14,25 @@ const noCacheHeaders = {
 
 export async function GET() {
   try {
+    if (isSupabaseConfigured && supabase) {
+      const { data, error } = await supabase
+        .from('criteria')
+        .select('*')
+        .order('created_at', { ascending: true });
+
+      if (error) throw error;
+
+      const formatted: Criterion[] = (data || []).map(c => ({
+        id: c.id,
+        name: c.name,
+        description: c.description || '',
+        maxScore: Number(c.max_score) || 25,
+        weight: Number(c.weight) || Number(c.max_score) || 25,
+      }));
+
+      return NextResponse.json(formatted, { headers: noCacheHeaders });
+    }
+
     const db = getDatabase();
     return NextResponse.json(db.criteria, { headers: noCacheHeaders });
   } catch (err: any) {
@@ -28,13 +48,45 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: 'اسم المعيار والدرجة القصوى مطلوبان' }, { status: 400, headers: noCacheHeaders });
     }
 
+    const newCritId = `crit-${Date.now()}`;
+    const cleanName = name.trim();
+    const cleanDesc = description?.trim() || '';
+    const numMaxScore = Number(maxScore) || 25;
+    const numWeight = Number(weight) || numMaxScore;
+
+    if (isSupabaseConfigured && supabase) {
+      const { data, error } = await supabase
+        .from('criteria')
+        .insert({
+          id: newCritId,
+          name: cleanName,
+          description: cleanDesc,
+          max_score: numMaxScore,
+          weight: numWeight,
+        })
+        .select()
+        .single();
+
+      if (error) throw error;
+
+      const created: Criterion = {
+        id: data.id,
+        name: data.name,
+        description: data.description,
+        maxScore: Number(data.max_score),
+        weight: Number(data.weight),
+      };
+
+      return NextResponse.json(created, { status: 201, headers: noCacheHeaders });
+    }
+
     const db = getDatabase();
     const newCriterion: Criterion = {
-      id: `crit-${Date.now()}`,
-      name: name.trim(),
-      description: description?.trim() || '',
-      maxScore: Number(maxScore) || 25,
-      weight: Number(weight) || Number(maxScore) || 25,
+      id: newCritId,
+      name: cleanName,
+      description: cleanDesc,
+      maxScore: numMaxScore,
+      weight: numWeight,
     };
 
     db.criteria.push(newCriterion);
@@ -54,6 +106,37 @@ export async function PUT(request: Request) {
       return NextResponse.json({ error: 'معرف المعيار والاسم والدرجة حقول مطلوبة' }, { status: 400, headers: noCacheHeaders });
     }
 
+    const cleanName = name.trim();
+    const cleanDesc = description?.trim() || '';
+    const numMaxScore = Number(maxScore);
+    const numWeight = Number(weight) || numMaxScore;
+
+    if (isSupabaseConfigured && supabase) {
+      const { data, error } = await supabase
+        .from('criteria')
+        .update({
+          name: cleanName,
+          description: cleanDesc,
+          max_score: numMaxScore,
+          weight: numWeight,
+        })
+        .eq('id', id)
+        .select()
+        .single();
+
+      if (error) throw error;
+
+      const updated: Criterion = {
+        id: data.id,
+        name: data.name,
+        description: data.description,
+        maxScore: Number(data.max_score),
+        weight: Number(data.weight),
+      };
+
+      return NextResponse.json(updated, { headers: noCacheHeaders });
+    }
+
     const db = getDatabase();
     const index = db.criteria.findIndex(c => c.id === id);
 
@@ -63,10 +146,10 @@ export async function PUT(request: Request) {
 
     const updated: Criterion = {
       id,
-      name: name.trim(),
-      description: description?.trim() || '',
-      maxScore: Number(maxScore),
-      weight: Number(weight) || Number(maxScore),
+      name: cleanName,
+      description: cleanDesc,
+      maxScore: numMaxScore,
+      weight: numWeight,
     };
 
     db.criteria[index] = updated;
@@ -94,11 +177,16 @@ export async function DELETE(request: Request) {
       return NextResponse.json({ error: 'معرف المعيار مطلوب' }, { status: 400, headers: noCacheHeaders });
     }
 
+    if (isSupabaseConfigured && supabase) {
+      const { error } = await supabase.from('criteria').delete().eq('id', id);
+      if (error) throw error;
+
+      return NextResponse.json({ success: true, deletedId: id }, { headers: noCacheHeaders });
+    }
+
     const db = getDatabase();
-    const beforeCount = db.criteria.length;
     db.criteria = db.criteria.filter(c => c.id !== id);
 
-    // Also clean up evaluations that had scores for this deleted criterion and recalculate totalScore
     db.evaluations = db.evaluations.map(ev => {
       if (ev.scores && ev.scores[id!] !== undefined) {
         const { [id!]: _, ...restScores } = ev.scores;
@@ -114,12 +202,7 @@ export async function DELETE(request: Request) {
 
     saveDatabase(db);
 
-    return NextResponse.json({
-      success: true,
-      deletedId: id,
-      remainingCount: db.criteria.length,
-      wasRemoved: beforeCount !== db.criteria.length
-    }, { headers: noCacheHeaders });
+    return NextResponse.json({ success: true, deletedId: id }, { headers: noCacheHeaders });
   } catch (err: any) {
     return NextResponse.json({ error: err.message }, { status: 500, headers: noCacheHeaders });
   }

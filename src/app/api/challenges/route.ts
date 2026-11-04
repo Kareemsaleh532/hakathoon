@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import { getDatabase, saveDatabase } from '@/lib/db';
+import { supabase, isSupabaseConfigured } from '@/lib/supabase';
 import { Challenge } from '@/types';
 
 export const dynamic = 'force-dynamic';
@@ -13,6 +14,27 @@ const noCacheHeaders = {
 
 export async function GET() {
   try {
+    if (isSupabaseConfigured && supabase) {
+      const { data, error } = await supabase
+        .from('challenges')
+        .select('*')
+        .order('created_at', { ascending: true });
+
+      if (error) throw error;
+
+      const formatted: Challenge[] = (data || []).map(ch => ({
+        id: ch.id,
+        title: ch.title,
+        track: ch.track || '',
+        description: ch.description || '',
+        targetImpact: ch.target_impact || '',
+        deliverables: ch.deliverables || [],
+        createdAt: ch.created_at,
+      }));
+
+      return NextResponse.json(formatted, { headers: noCacheHeaders });
+    }
+
     const db = getDatabase();
     return NextResponse.json(db.challenges, { headers: noCacheHeaders });
   } catch (err: any) {
@@ -28,18 +50,44 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: 'العنوان والمسار والوصف حقول إجبارية' }, { status: 400, headers: noCacheHeaders });
     }
 
+    const newChId = `ch-${Date.now()}`;
+    const cleanTitle = title.trim();
+    const cleanTrack = track.trim();
+    const cleanDesc = description.trim();
+    const cleanImpact = targetImpact?.trim() || '';
+    const parsedDeliverables = Array.isArray(deliverables)
+      ? deliverables
+      : typeof deliverables === 'string'
+      ? deliverables.split('\n').filter(Boolean)
+      : [];
+
+    if (isSupabaseConfigured && supabase) {
+      const { data, error } = await supabase
+        .from('challenges')
+        .insert({
+          id: newChId,
+          title: cleanTitle,
+          track: cleanTrack,
+          description: cleanDesc,
+          target_impact: cleanImpact,
+          deliverables: parsedDeliverables,
+        })
+        .select()
+        .single();
+
+      if (error) throw error;
+
+      return NextResponse.json(data, { status: 201, headers: noCacheHeaders });
+    }
+
     const db = getDatabase();
     const newChallenge: Challenge = {
-      id: `ch-${Date.now()}`,
-      title: title.trim(),
-      track: track.trim(),
-      description: description.trim(),
-      targetImpact: targetImpact?.trim() || '',
-      deliverables: Array.isArray(deliverables)
-        ? deliverables
-        : typeof deliverables === 'string'
-        ? deliverables.split('\n').filter(Boolean)
-        : [],
+      id: newChId,
+      title: cleanTitle,
+      track: cleanTrack,
+      description: cleanDesc,
+      targetImpact: cleanImpact,
+      deliverables: parsedDeliverables,
       createdAt: new Date().toISOString(),
     };
 
@@ -55,9 +103,23 @@ export async function POST(request: Request) {
 export async function DELETE(request: Request) {
   try {
     const { searchParams } = new URL(request.url);
-    const id = searchParams.get('id');
+    let id = searchParams.get('id');
+
+    if (!id) {
+      try {
+        const body = await request.json();
+        id = body?.id;
+      } catch (_) {}
+    }
+
     if (!id) {
       return NextResponse.json({ error: 'معرف التحدي مطلوب' }, { status: 400, headers: noCacheHeaders });
+    }
+
+    if (isSupabaseConfigured && supabase) {
+      const { error } = await supabase.from('challenges').delete().eq('id', id);
+      if (error) throw error;
+      return NextResponse.json({ success: true, deletedId: id }, { headers: noCacheHeaders });
     }
 
     const db = getDatabase();
