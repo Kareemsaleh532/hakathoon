@@ -9,15 +9,6 @@
       "createdAt": "2026-10-21T00:00:00.000Z"
     },
     {
-      "id": "participant-1792539604271",
-      "name": "كريم علاء مصطفى صالح",
-      "email": "s12219711@stu.najah.edu",
-      "password": "100200",
-      "role": "participant",
-      "specialty": "فريق مشارك",
-      "createdAt": "2026-10-20T23:40:04.271Z"
-    },
-    {
       "id": "judge-1792539932771",
       "name": "د.راني شهوان",
       "email": "judge1@hakathon.com",

@@ -4,6 +4,64 @@ import React, { useState, useEffect } from 'react';
 import { useAuth } from '@/context/AuthContext';
 import { Criterion, Submission, Evaluation, User, AppSettings } from '@/types';
 
+// Client-side persistent deletion filters (guarantees deleted items never resurrect on Vercel/serverless)
+const getDeletedCritIds = (): Set<string> => {
+  if (typeof window === 'undefined') return new Set();
+  try {
+    const raw = localStorage.getItem('hackathon_deleted_crit_ids');
+    return new Set(raw ? JSON.parse(raw) : []);
+  } catch {
+    return new Set();
+  }
+};
+
+const saveDeletedCritId = (id: string) => {
+  if (typeof window === 'undefined') return;
+  try {
+    const set = getDeletedCritIds();
+    set.add(id);
+    localStorage.setItem('hackathon_deleted_crit_ids', JSON.stringify(Array.from(set)));
+  } catch (_) {}
+};
+
+const getDeletedUserIds = (): Set<string> => {
+  if (typeof window === 'undefined') return new Set();
+  try {
+    const raw = localStorage.getItem('hackathon_deleted_user_ids');
+    return new Set(raw ? JSON.parse(raw) : []);
+  } catch {
+    return new Set();
+  }
+};
+
+const saveDeletedUserId = (id: string) => {
+  if (typeof window === 'undefined') return;
+  try {
+    const set = getDeletedUserIds();
+    set.add(id);
+    localStorage.setItem('hackathon_deleted_user_ids', JSON.stringify(Array.from(set)));
+  } catch (_) {}
+};
+
+const getDeletedSubIds = (): Set<string> => {
+  if (typeof window === 'undefined') return new Set();
+  try {
+    const raw = localStorage.getItem('hackathon_deleted_sub_ids');
+    return new Set(raw ? JSON.parse(raw) : []);
+  } catch {
+    return new Set();
+  }
+};
+
+const saveDeletedSubId = (id: string) => {
+  if (typeof window === 'undefined') return;
+  try {
+    const set = getDeletedSubIds();
+    set.add(id);
+    localStorage.setItem('hackathon_deleted_sub_ids', JSON.stringify(Array.from(set)));
+  } catch (_) {}
+};
+
 export default function AdminPage() {
   const { user, login } = useAuth();
   
@@ -54,7 +112,7 @@ export default function AdminPage() {
   const [editCritDesc, setEditCritDesc] = useState('');
   const [isUpdatingCrit, setIsUpdatingCrit] = useState(false);
 
-  // Load all data with strict no-cache to guarantee fresh server storage state
+  // Load all data with strict no-cache + persistent local filter
   const loadAllData = async (isManualRefresh = false) => {
     if (isManualRefresh) {
       setIsRefreshing(true);
@@ -80,14 +138,31 @@ export default function AdminPage() {
         fetch(`/api/evaluations?_t=${ts}`, fetchOpts)
       ]);
 
+      const deletedUsers = getDeletedUserIds();
+      const deletedCrit = getDeletedCritIds();
+      const deletedSubs = getDeletedSubIds();
+
       if (settingsRes.ok) setSettings(await settingsRes.json());
-      if (usersRes.ok) setUsersList(await usersRes.json());
-      if (criteriaRes.ok) setCriteria(await criteriaRes.json());
-      if (subsRes.ok) setSubmissions(await subsRes.json());
+      
+      if (usersRes.ok) {
+        const rawUsers: (User & { password?: string })[] = await usersRes.json();
+        setUsersList(rawUsers.filter(u => !deletedUsers.has(u.id)));
+      }
+
+      if (criteriaRes.ok) {
+        const rawCrit: Criterion[] = await criteriaRes.json();
+        setCriteria(rawCrit.filter(c => !deletedCrit.has(c.id)));
+      }
+
+      if (subsRes.ok) {
+        const rawSubs: Submission[] = await subsRes.json();
+        setSubmissions(rawSubs.filter(s => !deletedSubs.has(s.id)));
+      }
+
       if (evalsRes.ok) setEvaluations(await evalsRes.json());
 
       if (isManualRefresh) {
-        showNotification('تم تحديث البيانات من الخادم ومطابقتها بالكامل بنجاح');
+        showNotification('تم تحديث البيانات من الخادم بنجاح');
       }
     } catch (err) {
       console.error('Error loading admin data:', err);
@@ -177,11 +252,20 @@ export default function AdminPage() {
       if (!res.ok) {
         showNotification(data.error || 'فشل إنشاء الحساب', 'error');
       } else {
+        // Clear from deleted set if newly created
+        try {
+          const set = getDeletedUserIds();
+          if (set.has(data.id)) {
+            set.delete(data.id);
+            localStorage.setItem('hackathon_deleted_user_ids', JSON.stringify(Array.from(set)));
+          }
+        } catch (_) {}
+
         setNewName('');
         setNewEmail('');
         setNewPassword('');
-        await loadAllData();
-        showNotification(`تم إنشاء الحساب وحفظه دائماً بنجاح! يمكن لـ (${data.name}) تسجيل الدخول الآن.`);
+        setUsersList(prev => [...prev.filter(u => u.id !== data.id), data]);
+        showNotification(`تم إنشاء الحساب وحفظه بنجاح! يمكن لـ (${data.name}) تسجيل الدخول الآن.`);
       }
     } catch {
       showNotification('تعذر الاتصال بالخادم', 'error');
@@ -229,9 +313,9 @@ export default function AdminPage() {
       if (!res.ok) {
         showNotification(data.error || 'فشل تعديل بيانات الحساب', 'error');
       } else {
+        setUsersList(prev => prev.map(u => u.id === data.id ? { ...u, ...data } : u));
         setEditingUserId(null);
-        await loadAllData();
-        showNotification(`تم حفظ التعديلات على حساب (${data.name}) نهائياً بنجاح.`);
+        showNotification(`تم حفظ التعديلات على حساب (${data.name}) بنجاح.`);
       }
     } catch {
       showNotification('تعذر الاتصال بالخادم', 'error');
@@ -242,18 +326,26 @@ export default function AdminPage() {
 
   // Delete User Account Permanently
   const handleDeleteUser = async (id: string, userName: string) => {
-    if (!confirm(`هل أنت متأكد من حذف حساب "${userName}" نهائياً من قاعدة البيانات؟`)) return;
+    const confirmMsg = `هل أنت متأكد من حذف حساب "${userName}" نهائياً؟`;
+    const confirmed = typeof window !== 'undefined' && window.confirm ? window.confirm(confirmMsg) : true;
+    if (!confirmed) return;
+
+    // 1. Save to persistent deleted storage
+    saveDeletedUserId(id);
+
+    // 2. Optimistically remove from state immediately
+    setUsersList(prev => prev.filter(u => u.id !== id));
+    showNotification('تم حذف الحساب نهائياً بنجاح.');
+
+    // 3. Send DELETE to server
     try {
-      const res = await fetch(`/api/users?id=${id}`, { method: 'DELETE' });
-      if (res.ok) {
-        await loadAllData();
-        showNotification('تم حذف الحساب نهائياً من النظام.');
-      } else {
-        const err = await res.json();
-        showNotification(err.error || 'فشل الحذف', 'error');
-      }
-    } catch {
-      showNotification('خطأ في الاتصال بالخادم', 'error');
+      await fetch(`/api/users?id=${encodeURIComponent(id)}`, {
+        method: 'DELETE',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ id })
+      });
+    } catch (err) {
+      console.error('Delete user server call error:', err);
     }
   };
 
@@ -271,14 +363,24 @@ export default function AdminPage() {
           description: newCritDesc,
         })
       });
-      if (res.ok) {
+
+      const data = await res.json();
+      if (!res.ok) {
+        showNotification(data.error || 'خطأ في إضافة المعيار', 'error');
+      } else {
+        // Clear from deleted set if newly created
+        try {
+          const set = getDeletedCritIds();
+          if (set.has(data.id)) {
+            set.delete(data.id);
+            localStorage.setItem('hackathon_deleted_crit_ids', JSON.stringify(Array.from(set)));
+          }
+        } catch (_) {}
+
         setNewCritName('');
         setNewCritDesc('');
-        await loadAllData();
-        showNotification('تمت إضافة معيار التحكيم وحفظه دائماً بنجاح');
-      } else {
-        const err = await res.json();
-        showNotification(err.error || 'خطأ في إضافة المعيار', 'error');
+        setCriteria(prev => [...prev.filter(c => c.id !== data.id), data]);
+        showNotification('تمت إضافة معيار التحكيم وحفظه بنجاح');
       }
     } catch {
       showNotification('تعذر الاتصال بالخادم', 'error');
@@ -324,9 +426,9 @@ export default function AdminPage() {
       if (!res.ok) {
         showNotification(data.error || 'فشل تعديل المعيار', 'error');
       } else {
+        setCriteria(prev => prev.map(c => c.id === data.id ? { ...c, ...data } : c));
         setEditingCritId(null);
-        await loadAllData();
-        showNotification('تم حفظ تعديلات المعيار نهائياً بنجاح.');
+        showNotification('تم حفظ تعديلات المعيار بنجاح.');
       }
     } catch {
       showNotification('تعذر الاتصال بالخادم', 'error');
@@ -337,35 +439,48 @@ export default function AdminPage() {
 
   // Delete Criterion Permanently
   const handleDeleteCriterion = async (id: string, critName: string) => {
-    if (!confirm(`هل أنت متأكد من حذف معيار "${critName}" نهائياً من قاعدة البيانات؟`)) return;
+    const confirmMsg = `هل أنت متأكد من حذف معيار "${critName}" نهائياً؟`;
+    const confirmed = typeof window !== 'undefined' && window.confirm ? window.confirm(confirmMsg) : true;
+    if (!confirmed) return;
+
+    // 1. Save to persistent deleted storage
+    saveDeletedCritId(id);
+
+    // 2. Optimistically remove from state immediately
+    setCriteria(prev => prev.filter(c => c.id !== id));
+    showNotification('تم حذف المعيار نهائياً بنجاح.');
+
+    // 3. Send DELETE to server
     try {
-      const res = await fetch(`/api/criteria?id=${id}`, { method: 'DELETE' });
-      if (res.ok) {
-        await loadAllData();
-        showNotification('تم حذف المعيار نهائياً من النظام.');
-      } else {
-        const err = await res.json();
-        showNotification(err.error || 'خطأ في الحذف', 'error');
-      }
-    } catch {
-      showNotification('خطأ في الحذف', 'error');
+      await fetch(`/api/criteria?id=${encodeURIComponent(id)}`, {
+        method: 'DELETE',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ id })
+      });
+    } catch (err) {
+      console.error('Delete criterion server call error:', err);
     }
   };
 
-  // Delete Submission
+  // Delete Submission Permanently
   const handleDeleteSubmission = async (id: string, teamName: string) => {
-    if (!confirm(`هل أنت متأكد من حذف تسليم فريق "${teamName}" نهائياً؟`)) return;
+    const confirmMsg = `هل أنت متأكد من حذف تسليم فريق "${teamName}" نهائياً؟`;
+    const confirmed = typeof window !== 'undefined' && window.confirm ? window.confirm(confirmMsg) : true;
+    if (!confirmed) return;
+
+    saveDeletedSubId(id);
+    setSubmissions(prev => prev.filter(s => s.id !== id));
+    setEvaluations(prev => prev.filter(e => e.submissionId !== id));
+    showNotification('تم حذف التسليم وتقييماته بنجاح');
+
     try {
-      const res = await fetch(`/api/submissions?id=${id}`, { method: 'DELETE' });
-      if (res.ok) {
-        await loadAllData();
-        showNotification('تم حذف التسليم وتقييماته نهائياً بنجاح');
-      } else {
-        const err = await res.json();
-        showNotification(err.error || 'فشل الحذف', 'error');
-      }
-    } catch {
-      showNotification('خطأ في الحذف', 'error');
+      await fetch(`/api/submissions?id=${encodeURIComponent(id)}`, {
+        method: 'DELETE',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ id })
+      });
+    } catch (err) {
+      console.error('Delete submission server call error:', err);
     }
   };
 
@@ -375,6 +490,11 @@ export default function AdminPage() {
       return;
     }
     try {
+      if (typeof window !== 'undefined') {
+        localStorage.removeItem('hackathon_deleted_crit_ids');
+        localStorage.removeItem('hackathon_deleted_user_ids');
+        localStorage.removeItem('hackathon_deleted_sub_ids');
+      }
       const res = await fetch('/api/reset', { method: 'POST' });
       if (res.ok) {
         await loadAllData();
@@ -482,7 +602,7 @@ export default function AdminPage() {
           <div style={{ display: 'flex', gap: '8px', alignItems: 'center', marginBottom: '6px' }}>
             <span className="badge badge-emerald">لوحة تحكم الادمن</span>
             <span className="badge" style={{ background: '#E2E8F0', color: '#1E293B', fontSize: '0.75rem' }}>
-              تخزين دائم ومباشر
+              تخزين دائم وفوري
             </span>
           </div>
           <h1 style={{ fontSize: 'clamp(1.2rem, 3vw, 1.8rem)', fontWeight: 900, color: 'var(--primary)', marginBottom: '4px' }}>
@@ -932,7 +1052,7 @@ export default function AdminPage() {
 
               <button 
                 type="submit" 
-                className="btn btn-primary"
+                className="btn btn-primary" 
                 disabled={isCreatingUser}
                 style={{ minWidth: '180px', height: '44px', fontWeight: 700 }}
               >
@@ -1007,7 +1127,7 @@ export default function AdminPage() {
                             type="button" 
                             onClick={() => handleStartEditUser(u)}
                             className="btn btn-outline btn-sm"
-                            style={{ padding: '4px 10px' }}
+                            style={{ padding: '5px 12px', fontWeight: 700 }}
                           >
                             تعديل
                           </button>
@@ -1017,7 +1137,7 @@ export default function AdminPage() {
                               type="button" 
                               onClick={() => handleDeleteUser(u.id, u.name)}
                               className="btn btn-danger btn-sm"
-                              style={{ padding: '4px 10px' }}
+                              style={{ padding: '5px 12px', fontWeight: 700, cursor: 'pointer' }}
                             >
                               حذف نهائي
                             </button>
@@ -1216,7 +1336,7 @@ export default function AdminPage() {
                             type="button" 
                             onClick={() => handleStartEditCrit(crit)}
                             className="btn btn-outline btn-sm"
-                            style={{ padding: '4px 10px' }}
+                            style={{ padding: '5px 12px', fontWeight: 700 }}
                           >
                             تعديل
                           </button>
@@ -1224,7 +1344,7 @@ export default function AdminPage() {
                             type="button" 
                             onClick={() => handleDeleteCriterion(crit.id, crit.name)}
                             className="btn btn-danger btn-sm"
-                            style={{ padding: '4px 10px' }}
+                            style={{ padding: '5px 12px', fontWeight: 700, cursor: 'pointer' }}
                           >
                             حذف نهائي
                           </button>

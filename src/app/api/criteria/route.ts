@@ -81,7 +81,15 @@ export async function PUT(request: Request) {
 export async function DELETE(request: Request) {
   try {
     const { searchParams } = new URL(request.url);
-    const id = searchParams.get('id');
+    let id = searchParams.get('id');
+
+    if (!id) {
+      try {
+        const body = await request.json();
+        id = body?.id;
+      } catch (_) {}
+    }
+
     if (!id) {
       return NextResponse.json({ error: 'معرف المعيار مطلوب' }, { status: 400, headers: noCacheHeaders });
     }
@@ -92,8 +100,8 @@ export async function DELETE(request: Request) {
 
     // Also clean up evaluations that had scores for this deleted criterion and recalculate totalScore
     db.evaluations = db.evaluations.map(ev => {
-      if (ev.scores && ev.scores[id] !== undefined) {
-        const { [id]: _, ...restScores } = ev.scores;
+      if (ev.scores && ev.scores[id!] !== undefined) {
+        const { [id!]: _, ...restScores } = ev.scores;
         const newTotal = Object.values(restScores).reduce((sum, s) => sum + (Number(s) || 0), 0);
         return {
           ...ev,

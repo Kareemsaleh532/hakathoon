@@ -116,7 +116,14 @@ export async function PUT(request: Request) {
 export async function DELETE(request: Request) {
   try {
     const { searchParams } = new URL(request.url);
-    const id = searchParams.get('id');
+    let id = searchParams.get('id');
+
+    if (!id) {
+      try {
+        const body = await request.json();
+        id = body?.id;
+      } catch (_) {}
+    }
 
     if (!id) {
       return NextResponse.json({ error: 'معرف المستخدم مطلوب' }, { status: 400, headers: noCacheHeaders });

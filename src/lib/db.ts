@@ -1,5 +1,6 @@
 import fs from 'fs';
 import path from 'path';
+import os from 'os';
 import { User, Team, Challenge, Criterion, Submission, Evaluation, AppSettings } from '@/types';
 
 export interface DatabaseSchema {
@@ -12,12 +13,58 @@ export interface DatabaseSchema {
   settings: AppSettings;
 }
 
-const DATA_DIR = path.join(process.cwd(), 'data');
+// Check if a directory is writable
+function isDirectoryWritable(dirPath: string): boolean {
+  try {
+    if (!fs.existsSync(dirPath)) {
+      fs.mkdirSync(dirPath, { recursive: true });
+    }
+    const testFile = path.join(dirPath, `.write-test-${Date.now()}`);
+    fs.writeFileSync(testFile, 'ok', 'utf-8');
+    fs.unlinkSync(testFile);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+// Resolve optimal storage directory (local project folder vs /tmp for Vercel/serverless)
+function getStorageDirectory(): string {
+  const isServerless = Boolean(
+    process.env.VERCEL ||
+    process.env.AWS_LAMBDA_FUNCTION_NAME ||
+    process.env.LAMBDA_TASK_ROOT ||
+    process.env.NETLIFY
+  );
+
+  const localDir = path.join(process.cwd(), 'data');
+
+  // If local development and data/ is writable, use localDir
+  if (!isServerless && isDirectoryWritable(localDir)) {
+    return localDir;
+  }
+
+  // On Vercel / serverless (where process.cwd() is read-only /var/task), use /tmp
+  const tmpDir = path.join(os.tmpdir(), 'hackathon-data');
+  try {
+    if (!fs.existsSync(tmpDir)) {
+      fs.mkdirSync(tmpDir, { recursive: true });
+    }
+  } catch (err) {
+    console.error('Failed to create tmp dir:', err);
+  }
+  return tmpDir;
+}
+
+const DATA_DIR = getStorageDirectory();
 const DB_FILE = path.join(DATA_DIR, 'db.json');
 const DB_BAK_FILE = path.join(DATA_DIR, 'db.json.bak');
 const DB_TMP_FILE = path.join(DATA_DIR, 'db.json.tmp');
 
-// Initial default admin user
+// Bundled reference file shipped with git repo
+const BUNDLED_DB_FILE = path.join(process.cwd(), 'data', 'db.json');
+
+// Initial default schema
 export const initialDatabase: DatabaseSchema = {
   users: [
     {
@@ -31,36 +78,7 @@ export const initialDatabase: DatabaseSchema = {
   ],
   teams: [],
   challenges: [],
-  criteria: [
-    {
-      id: 'crit-1',
-      name: 'أصالة الفكرة والابتكار',
-      description: 'مدى جدة الفكرة وابتكار الحل المقدم وتميزه عن الحلول التقليدية.',
-      maxScore: 25,
-      weight: 25,
-    },
-    {
-      id: 'crit-2',
-      name: 'جودة التنفيذ والحل التقني',
-      description: 'اكتمال العمل التقني وجودة بناء المشروع وقابليته للعمل.',
-      maxScore: 25,
-      weight: 25,
-    },
-    {
-      id: 'crit-3',
-      name: 'الأثر والجدوى الواقعية',
-      description: 'الأثر البيئي/المجتمعي وإمكانية تطبيق المشروع واستدامته على أرض الواقع.',
-      maxScore: 25,
-      weight: 25,
-    },
-    {
-      id: 'crit-4',
-      name: 'جودة العرض والتسليم',
-      description: 'وضوح الملفات المسلّمة وتنظيم الأفكار وشمولية التسليم.',
-      maxScore: 25,
-      weight: 25,
-    }
-  ],
+  criteria: [],
   submissions: [],
   evaluations: [],
   settings: {
@@ -69,10 +87,12 @@ export const initialDatabase: DatabaseSchema = {
   }
 };
 
-// Global in-memory cache to guarantee instant, thread-safe, hot-reload-safe persistence
+// Global in-memory cache to guarantee instant persistence across requests
 declare global {
   // eslint-disable-next-line no-var
   var __HACKATHON_DB__: DatabaseSchema | undefined;
+  // eslint-disable-next-line no-var
+  var __HACKATHON_DB_LOADED__: boolean | undefined;
 }
 
 function normalizeDatabase(raw: any): DatabaseSchema {
@@ -93,23 +113,27 @@ function normalizeDatabase(raw: any): DatabaseSchema {
   };
 }
 
-function ensureDataDir(): void {
+function ensureDataFile(): void {
   try {
     if (!fs.existsSync(DATA_DIR)) {
       fs.mkdirSync(DATA_DIR, { recursive: true });
     }
-  } catch (err) {
-    console.error('Failed to create data dir:', err);
-  }
-}
 
-function ensureDataFile(): void {
-  ensureDataDir();
-  try {
     if (!fs.existsSync(DB_FILE)) {
+      // If we are in /tmp and the bundled project has data/db.json, copy it over!
+      if (fs.existsSync(BUNDLED_DB_FILE) && BUNDLED_DB_FILE !== DB_FILE) {
+        try {
+          const bundledContent = fs.readFileSync(BUNDLED_DB_FILE, 'utf-8');
+          fs.writeFileSync(DB_FILE, bundledContent, 'utf-8');
+          return;
+        } catch (_) {}
+      }
+
+      // Otherwise initialize with initialDatabase
       const initial = JSON.parse(JSON.stringify(initialDatabase));
       fs.writeFileSync(DB_FILE, JSON.stringify(initial, null, 2), 'utf-8');
       globalThis.__HACKATHON_DB__ = initial;
+      globalThis.__HACKATHON_DB_LOADED__ = true;
     }
   } catch (err) {
     console.error('Failed to ensure data file:', err);
@@ -117,28 +141,33 @@ function ensureDataFile(): void {
 }
 
 export function getDatabase(): DatabaseSchema {
+  // 1. If in-memory cache is already loaded and modified, return it
+  if (globalThis.__HACKATHON_DB__ && globalThis.__HACKATHON_DB_LOADED__) {
+    return globalThis.__HACKATHON_DB__;
+  }
+
   ensureDataFile();
 
-  // Try reading fresh from disk
+  // 2. Try reading from active DB_FILE
   try {
     if (fs.existsSync(DB_FILE)) {
       const rawText = fs.readFileSync(DB_FILE, 'utf-8').trim();
       if (rawText.length > 0) {
         const parsed = JSON.parse(rawText);
         const normalized = normalizeDatabase(parsed);
-        // Ensure admin always exists
         if (!normalized.users.some(u => u.role === 'admin')) {
           normalized.users.unshift(initialDatabase.users[0]);
         }
         globalThis.__HACKATHON_DB__ = normalized;
+        globalThis.__HACKATHON_DB_LOADED__ = true;
         return normalized;
       }
     }
   } catch (err) {
-    console.warn('Failed to read db.json, attempting recovery from backup or memory:', err);
+    console.warn('Failed to read db.json, attempting backup file:', err);
   }
 
-  // Fallback 1: try backup file if main was read during mid-write
+  // 3. Fallback to backup file
   try {
     if (fs.existsSync(DB_BAK_FILE)) {
       const bakText = fs.readFileSync(DB_BAK_FILE, 'utf-8').trim();
@@ -146,25 +175,35 @@ export function getDatabase(): DatabaseSchema {
         const parsed = JSON.parse(bakText);
         const normalized = normalizeDatabase(parsed);
         globalThis.__HACKATHON_DB__ = normalized;
+        globalThis.__HACKATHON_DB_LOADED__ = true;
         return normalized;
       }
     }
   } catch (_) {}
 
-  // Fallback 2: in-memory cache
-  if (globalThis.__HACKATHON_DB__) {
-    return globalThis.__HACKATHON_DB__;
+  // 4. Fallback to bundled file if different
+  if (DB_FILE !== BUNDLED_DB_FILE && fs.existsSync(BUNDLED_DB_FILE)) {
+    try {
+      const bundledText = fs.readFileSync(BUNDLED_DB_FILE, 'utf-8').trim();
+      if (bundledText.length > 0) {
+        const parsed = JSON.parse(bundledText);
+        const normalized = normalizeDatabase(parsed);
+        globalThis.__HACKATHON_DB__ = normalized;
+        globalThis.__HACKATHON_DB_LOADED__ = true;
+        return normalized;
+      }
+    } catch (_) {}
   }
 
-  // Fallback 3: fresh initial database
+  // 5. Fallback to initialDatabase
   const fresh = JSON.parse(JSON.stringify(initialDatabase));
   globalThis.__HACKATHON_DB__ = fresh;
+  globalThis.__HACKATHON_DB_LOADED__ = true;
   saveDatabase(fresh);
   return fresh;
 }
 
 export function saveDatabase(data: DatabaseSchema): boolean {
-  ensureDataDir();
   const normalized = normalizeDatabase(data);
 
   // Always protect the main admin account
@@ -174,10 +213,17 @@ export function saveDatabase(data: DatabaseSchema): boolean {
 
   // 1. Immediately update global in-memory cache (zero latency for subsequent requests)
   globalThis.__HACKATHON_DB__ = normalized;
+  globalThis.__HACKATHON_DB_LOADED__ = true;
 
   const jsonString = JSON.stringify(normalized, null, 2);
 
-  // 2. Write to disk using atomic temp file replacement with retry
+  // 2. Persist to disk
+  try {
+    if (!fs.existsSync(DATA_DIR)) {
+      fs.mkdirSync(DATA_DIR, { recursive: true });
+    }
+  } catch (_) {}
+
   let written = false;
   let attempts = 0;
 
@@ -213,8 +259,7 @@ export function saveDatabase(data: DatabaseSchema): boolean {
       if (attempts >= 5) {
         console.error('Failed to save database file after 5 attempts:', err);
       } else {
-        // Short synchronous sleep before retry
-        const end = Date.now() + 25;
+        const end = Date.now() + 20;
         while (Date.now() < end) {}
       }
     }
@@ -223,7 +268,7 @@ export function saveDatabase(data: DatabaseSchema): boolean {
   return written;
 }
 
-// Reset helper - clean state
+// Reset helper
 export function resetDatabase(): DatabaseSchema {
   const fresh: DatabaseSchema = {
     users: [
